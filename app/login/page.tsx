@@ -9,6 +9,8 @@ import {
 import { useRouter } from "next/navigation";
 
 import { supabase } from "../lib/supabase";
+import { getAuthenticatedDestination } from "../lib/auth-navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,7 +39,8 @@ export default function LoginPage() {
         } = await supabase.auth.getSession();
 
         if (session) {
-          router.replace("/profile");
+          const destination = await getAuthenticatedDestination();
+          router.replace(destination);
           return;
         }
       } catch (error) {
@@ -99,7 +102,8 @@ export default function LoginPage() {
       setMessage("Login realizado com sucesso!");
       setMessageType("success");
 
-      router.replace("/profile");
+      const destination = await getAuthenticatedDestination();
+      router.replace(destination);
       router.refresh();
     } catch (error) {
       console.error("Erro no login:", error);
@@ -274,10 +278,17 @@ export default function LoginPage() {
             )}
           </button>
 
-          <p className="mt-6 text-center text-xs text-slate-500">
-            Use o e-mail e a senha cadastrados no
-            Supabase.
-          </p>
+          <div className="mt-6 space-y-3 text-center text-sm">
+            <Link href="/forgot-password" className="block text-slate-400 transition hover:text-emerald-400">
+              Esqueci minha senha
+            </Link>
+            <p className="text-slate-500">
+              Ainda não possui conta?{" "}
+              <Link href="/register" className="font-semibold text-emerald-400 hover:text-emerald-300">
+                Criar conta
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </main>

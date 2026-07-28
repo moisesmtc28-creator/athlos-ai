@@ -1,10 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useState,
+} from "react";
+
 import { useParams, useRouter } from "next/navigation";
 
 import { useTraining } from "@/app/hooks/use-training";
 import { useUpdateTraining } from "@/app/hooks/use-update-training";
+
 import type {
   TrainingStatus,
   TrainingZone,
@@ -24,19 +30,45 @@ type FormState = {
   athleteFeedback: string;
 };
 
-const initialFormState: FormState = {
-  status: "planned",
-  completedDurationMinutes: "",
-  averageHeartRate: "",
-  maxHeartRate: "",
-  distanceKm: "",
-  averageSpeed: "",
-  cadence: "",
-  calories: "",
-  elevationGain: "",
-  perceivedEffort: "",
-  athleteFeedback: "",
-};
+type TrainingData = NonNullable<
+  ReturnType<typeof useTraining>["data"]
+>;
+
+function createFormState(training: TrainingData): FormState {
+  return {
+    status: training.status,
+
+    completedDurationMinutes:
+      training.completedDurationMinutes?.toString() ?? "",
+
+    averageHeartRate:
+      training.averageHeartRate?.toString() ?? "",
+
+    maxHeartRate:
+      training.maxHeartRate?.toString() ?? "",
+
+    distanceKm:
+      training.distanceKm?.toString() ?? "",
+
+    averageSpeed:
+      training.averageSpeed?.toString() ?? "",
+
+    cadence:
+      training.cadence?.toString() ?? "",
+
+    calories:
+      training.calories?.toString() ?? "",
+
+    elevationGain:
+      training.elevationGain?.toString() ?? "",
+
+    perceivedEffort:
+      training.perceivedEffort?.toString() ?? "",
+
+    athleteFeedback:
+      training.athleteFeedback ?? "",
+  };
+}
 
 function numberOrNull(value: string): number | null {
   if (value.trim() === "") {
@@ -46,10 +78,12 @@ function numberOrNull(value: string): number | null {
   const normalizedValue = value.replace(",", ".");
   const parsedValue = Number(normalizedValue);
 
-  return Number.isNaN(parsedValue) ? null : parsedValue;
+  return Number.isNaN(parsedValue)
+    ? null
+    : parsedValue;
 }
 
-function formatDate(date: string) {
+function formatDate(date: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -57,7 +91,7 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
-function getZoneLabel(zone: TrainingZone) {
+function getZoneLabel(zone: TrainingZone): string {
   const labels: Record<TrainingZone, string> = {
     Z1: "Z1 — Recuperação",
     Z2: "Z2 — Endurance",
@@ -70,113 +104,33 @@ function getZoneLabel(zone: TrainingZone) {
   return labels[zone];
 }
 
+function getStatusLabel(status: TrainingStatus): string {
+  const labels: Record<TrainingStatus, string> = {
+    planned: "Planejado",
+    in_progress: "Em andamento",
+    completed: "Concluído",
+    missed: "Não realizado",
+    cancelled: "Cancelado",
+  };
+
+  return labels[status];
+}
+
 export default function TrainingDetailsPage() {
   const params = useParams();
   const router = useRouter();
 
-  const id = params.id as string;
+  const id =
+    typeof params.id === "string"
+      ? params.id
+      : params.id?.[0];
 
   const {
     data: training,
     isLoading,
     isError,
     error,
-  } = useTraining(id);
-
-  const updateTrainingMutation = useUpdateTraining();
-
-  const [form, setForm] =
-    useState<FormState>(initialFormState);
-
-  const [successMessage, setSuccessMessage] =
-    useState("");
-
-  useEffect(() => {
-    if (!training) {
-      return;
-    }
-
-    setForm({
-      status: training.status,
-      completedDurationMinutes:
-        training.completedDurationMinutes?.toString() ?? "",
-      averageHeartRate:
-        training.averageHeartRate?.toString() ?? "",
-      maxHeartRate:
-        training.maxHeartRate?.toString() ?? "",
-      distanceKm:
-        training.distanceKm?.toString() ?? "",
-      averageSpeed:
-        training.averageSpeed?.toString() ?? "",
-      cadence:
-        training.cadence?.toString() ?? "",
-      calories:
-        training.calories?.toString() ?? "",
-      elevationGain:
-        training.elevationGain?.toString() ?? "",
-      perceivedEffort:
-        training.perceivedEffort?.toString() ?? "",
-      athleteFeedback:
-        training.athleteFeedback ?? "",
-    });
-  }, [training]);
-
-  function updateField<K extends keyof FormState>(
-    field: K,
-    value: FormState[K],
-  ) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-
-    setSuccessMessage("");
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-
-    if (!training) {
-      return;
-    }
-
-    const perceivedEffort =
-      numberOrNull(form.perceivedEffort);
-
-    if (
-      perceivedEffort !== null &&
-      (perceivedEffort < 1 || perceivedEffort > 10)
-    ) {
-      return;
-    }
-
-    setSuccessMessage("");
-
-    await updateTrainingMutation.mutateAsync({
-      id: training.id,
-      status: form.status,
-      completedDurationMinutes: numberOrNull(
-        form.completedDurationMinutes,
-      ),
-      averageHeartRate: numberOrNull(
-        form.averageHeartRate,
-      ),
-      maxHeartRate: numberOrNull(
-        form.maxHeartRate,
-      ),
-      distanceKm: numberOrNull(form.distanceKm),
-      averageSpeed: numberOrNull(form.averageSpeed),
-      cadence: numberOrNull(form.cadence),
-      calories: numberOrNull(form.calories),
-      elevationGain: numberOrNull(form.elevationGain),
-      perceivedEffort,
-      athleteFeedback: form.athleteFeedback.trim(),
-    });
-
-    setSuccessMessage(
-      "Treino atualizado com sucesso.",
-    );
-  }
+  } = useTraining(id ?? "");
 
   if (isLoading) {
     return (
@@ -210,7 +164,117 @@ export default function TrainingDetailsPage() {
     );
   }
 
-  const rpeValue = numberOrNull(form.perceivedEffort);
+  /*
+   * A propriedade key recria apenas o formulário quando
+   * outro treino é carregado. Assim não precisamos usar
+   * setState dentro de useEffect.
+   */
+  return (
+    <TrainingDetailsForm
+      key={training.id}
+      training={training}
+    />
+  );
+}
+
+function TrainingDetailsForm({
+  training,
+}: {
+  training: TrainingData;
+}) {
+  const router = useRouter();
+  const updateTrainingMutation = useUpdateTraining();
+
+  const [form, setForm] = useState<FormState>(() =>
+    createFormState(training),
+  );
+
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  function updateField<K extends keyof FormState>(
+    field: K,
+    value: FormState[K],
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setSuccessMessage("");
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    const perceivedEffort = numberOrNull(
+      form.perceivedEffort,
+    );
+
+    if (
+      perceivedEffort !== null &&
+      (perceivedEffort < 1 || perceivedEffort > 10)
+    ) {
+      return;
+    }
+
+    setSuccessMessage("");
+
+    try {
+      await updateTrainingMutation.mutateAsync({
+        id: training.id,
+        status: form.status,
+
+        completedDurationMinutes: numberOrNull(
+          form.completedDurationMinutes,
+        ),
+
+        averageHeartRate: numberOrNull(
+          form.averageHeartRate,
+        ),
+
+        maxHeartRate: numberOrNull(
+          form.maxHeartRate,
+        ),
+
+        distanceKm: numberOrNull(
+          form.distanceKm,
+        ),
+
+        averageSpeed: numberOrNull(
+          form.averageSpeed,
+        ),
+
+        cadence: numberOrNull(
+          form.cadence,
+        ),
+
+        calories: numberOrNull(
+          form.calories,
+        ),
+
+        elevationGain: numberOrNull(
+          form.elevationGain,
+        ),
+
+        perceivedEffort,
+
+        athleteFeedback:
+          form.athleteFeedback.trim(),
+      });
+
+      setSuccessMessage(
+        "Treino atualizado com sucesso.",
+      );
+    } catch {
+      // O erro já é exibido pelo estado da mutation.
+    }
+  }
+
+  const rpeValue = numberOrNull(
+    form.perceivedEffort,
+  );
+
   const invalidRpe =
     rpeValue !== null &&
     (rpeValue < 1 || rpeValue > 10);
@@ -326,7 +390,9 @@ export default function TrainingDetailsPage() {
               <NumberField
                 label="Duração realizada"
                 unit="min"
-                value={form.completedDurationMinutes}
+                value={
+                  form.completedDurationMinutes
+                }
                 onChange={(value) =>
                   updateField(
                     "completedDurationMinutes",
@@ -356,7 +422,10 @@ export default function TrainingDetailsPage() {
                 unit="bpm"
                 value={form.maxHeartRate}
                 onChange={(value) =>
-                  updateField("maxHeartRate", value)
+                  updateField(
+                    "maxHeartRate",
+                    value,
+                  )
                 }
                 min={0}
                 step="1"
@@ -367,7 +436,10 @@ export default function TrainingDetailsPage() {
                 unit="km"
                 value={form.distanceKm}
                 onChange={(value) =>
-                  updateField("distanceKm", value)
+                  updateField(
+                    "distanceKm",
+                    value,
+                  )
                 }
                 min={0}
                 step="0.01"
@@ -378,7 +450,10 @@ export default function TrainingDetailsPage() {
                 unit="km/h"
                 value={form.averageSpeed}
                 onChange={(value) =>
-                  updateField("averageSpeed", value)
+                  updateField(
+                    "averageSpeed",
+                    value,
+                  )
                 }
                 min={0}
                 step="0.1"
@@ -389,7 +464,10 @@ export default function TrainingDetailsPage() {
                 unit="rpm"
                 value={form.cadence}
                 onChange={(value) =>
-                  updateField("cadence", value)
+                  updateField(
+                    "cadence",
+                    value,
+                  )
                 }
                 min={0}
                 step="1"
@@ -400,7 +478,10 @@ export default function TrainingDetailsPage() {
                 unit="kcal"
                 value={form.calories}
                 onChange={(value) =>
-                  updateField("calories", value)
+                  updateField(
+                    "calories",
+                    value,
+                  )
                 }
                 min={0}
                 step="1"
@@ -411,7 +492,10 @@ export default function TrainingDetailsPage() {
                 unit="m"
                 value={form.elevationGain}
                 onChange={(value) =>
-                  updateField("elevationGain", value)
+                  updateField(
+                    "elevationGain",
+                    value,
+                  )
                 }
                 min={0}
                 step="1"
@@ -461,8 +545,10 @@ export default function TrainingDetailsPage() {
 
             {updateTrainingMutation.isError && (
               <div className="mt-6 rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
-                {updateTrainingMutation.error instanceof Error
-                  ? updateTrainingMutation.error.message
+                {updateTrainingMutation.error
+                  instanceof Error
+                  ? updateTrainingMutation.error
+                      .message
                   : "Não foi possível salvar o treino."}
               </div>
             )}
@@ -476,7 +562,9 @@ export default function TrainingDetailsPage() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => router.push("/training")}
+                onClick={() =>
+                  router.push("/training")
+                }
                 className="rounded-xl border border-slate-700 px-5 py-3 font-medium text-slate-300 transition hover:bg-slate-800"
               >
                 Cancelar
@@ -588,7 +676,7 @@ function SelectField({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label className="block">
@@ -607,16 +695,4 @@ function SelectField({
       </select>
     </label>
   );
-}
-
-function getStatusLabel(status: TrainingStatus) {
-  const labels: Record<TrainingStatus, string> = {
-    planned: "Planejado",
-    in_progress: "Em andamento",
-    completed: "Concluído",
-    missed: "Não realizado",
-    cancelled: "Cancelado",
-  };
-
-  return labels[status];
 }

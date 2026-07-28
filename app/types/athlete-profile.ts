@@ -62,12 +62,7 @@ export interface AthleteProfile {
   preferred_training_time: PreferredTrainingTime | "";
 
   available_days: string[];
-
-  available_minutes_by_day: Record<
-    string,
-    number
-  >;
-
+  available_minutes_by_day: Record<string, number>;
   gym_days: string[];
 
   physical_limitations: string;

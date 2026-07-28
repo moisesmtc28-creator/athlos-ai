@@ -1,7 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 import {
   FormEvent,
   InputHTMLAttributes,
@@ -13,12 +11,12 @@ import {
 import {
   useAthleteProfile,
   useSaveAthleteProfile,
-} from "../hooks/use-athlete-profile";
+} from "@/hooks/use-athlete-profile";
 
 import {
   AthleteProfile,
   emptyAthleteProfile,
-} from "../types/athlete-profile";
+} from "@/types/athlete-profile";
 
 const weekDays = [
   { value: "monday", label: "Segunda" },
@@ -40,13 +38,7 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(parsedValue) ? parsedValue : null;
 }
 
-function safeText(value: string | null | undefined): string {
-  return value ?? "";
-}
-
 export default function ProfilePage() {
-  const router = useRouter();
-
   const {
     data: savedProfile,
     isLoading,
@@ -67,57 +59,14 @@ export default function ProfilePage() {
       return;
     }
 
-    const availableDays = savedProfile.available_days ?? [];
-
-    const availableMinutesByDay = {
-      ...(savedProfile.available_minutes_by_day ?? {}),
-    };
-
-    /*
-     * O campo mostrava 60 na tela por causa do `?? 60`,
-     * mas esse valor ainda não existia no estado.
-     * Agora cada dia já selecionado recebe 60 minutos
-     * quando não possuir um tempo válido salvo.
-     */
-    availableDays.forEach((day) => {
-      const minutes = Number(availableMinutesByDay[day]);
-
-      if (!Number.isFinite(minutes) || minutes < 15) {
-        availableMinutesByDay[day] = 60;
-      }
-    });
-
+    // O perfil vem de uma consulta assíncrona. A sincronização é intencional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfile({
       ...emptyAthleteProfile,
       ...savedProfile,
-      full_name: safeText(savedProfile.full_name),
-      birth_date: safeText(savedProfile.birth_date),
-      sex: safeText(savedProfile.sex) as AthleteProfile["sex"],
-      cycling_level:
-        safeText(savedProfile.cycling_level) as AthleteProfile["cycling_level"],
-      preferred_bike: safeText(savedProfile.preferred_bike),
-      main_cycling_type:
-        safeText(
-          savedProfile.main_cycling_type,
-        ) as AthleteProfile["main_cycling_type"],
-      terrain: safeText(savedProfile.terrain),
-      goal: safeText(savedProfile.goal),
-      preferred_training_time:
-        safeText(
-          savedProfile.preferred_training_time,
-        ) as AthleteProfile["preferred_training_time"],
-      goal_details: safeText(savedProfile.goal_details),
-      physical_limitations: safeText(
-        savedProfile.physical_limitations,
-      ),
-      target_event_name: safeText(
-        savedProfile.target_event_name,
-      ),
-      target_event_date: safeText(
-        savedProfile.target_event_date,
-      ),
-      available_days: availableDays,
-      available_minutes_by_day: availableMinutesByDay,
+      available_days: savedProfile.available_days ?? [],
+      available_minutes_by_day:
+        savedProfile.available_minutes_by_day ?? {},
       gym_days: savedProfile.gym_days ?? [],
     });
   }, [savedProfile]);
@@ -137,7 +86,7 @@ export default function ProfilePage() {
     value: string,
   ) {
     setProfile((currentProfile) => {
-      const currentValues = currentProfile[field] ?? [];
+      const currentValues = currentProfile[field];
 
       const newValues = currentValues.includes(value)
         ? currentValues.filter((item) => item !== value)
@@ -148,23 +97,15 @@ export default function ProfilePage() {
         [field]: newValues,
       };
 
-      if (field === "available_days") {
+      if (
+        field === "available_days" &&
+        !newValues.includes(value)
+      ) {
         const newMinutes = {
-          ...(currentProfile.available_minutes_by_day ?? {}),
+          ...currentProfile.available_minutes_by_day,
         };
 
-        if (newValues.includes(value)) {
-          const currentMinutes = Number(newMinutes[value]);
-
-          if (
-            !Number.isFinite(currentMinutes) ||
-            currentMinutes < 15
-          ) {
-            newMinutes[value] = 60;
-          }
-        } else {
-          delete newMinutes[value];
-        }
+        delete newMinutes[value];
 
         nextProfile.available_minutes_by_day = newMinutes;
       }
@@ -180,7 +121,7 @@ export default function ProfilePage() {
     setProfile((currentProfile) => ({
       ...currentProfile,
       available_minutes_by_day: {
-        ...(currentProfile.available_minutes_by_day ?? {}),
+        ...currentProfile.available_minutes_by_day,
         [day]: minutes,
       },
     }));
@@ -191,114 +132,24 @@ export default function ProfilePage() {
 
     setMessage("");
 
-    const missingFields: string[] = [];
-
-    if (!(profile.full_name ?? "").trim()) {
-      missingFields.push("Nome completo");
-    }
-
-    if (!profile.cycling_level) {
-      missingFields.push("Nível atual");
-    }
-
-    if (!profile.main_cycling_type) {
-      missingFields.push("Modalidade principal");
-    }
-
-    if (!profile.goal) {
-      missingFields.push("Objetivo principal");
-    }
-
-    if ((profile.available_days ?? []).length === 0) {
-      missingFields.push("Pelo menos um dia disponível");
-    }
-
-    const selectedDaysWithoutValidMinutes = (
-      profile.available_days ?? []
-    ).filter((day) => {
-      const minutes =
-        profile.available_minutes_by_day?.[day];
-
-      return !minutes || minutes < 15;
-    });
-
-    if (selectedDaysWithoutValidMinutes.length > 0) {
-      missingFields.push(
-        "Tempo disponível de pelo menos 15 minutos nos dias selecionados",
-      );
-    }
-
-    if (profile.does_strength_training) {
-      if (
-        !profile.strength_days_per_week ||
-        profile.strength_days_per_week < 1
-      ) {
-        missingFields.push(
-          "Quantidade de treinos de musculação por semana",
-        );
-      }
-
-      if ((profile.gym_days ?? []).length === 0) {
-        missingFields.push("Pelo menos um dia de academia");
-      }
-    }
-
-    if (profile.target_event_name && !profile.target_event_date) {
-      missingFields.push("Data da prova ou evento");
-    }
-
-    if (!profile.target_event_name && profile.target_event_date) {
-      missingFields.push("Nome da prova ou evento");
-    }
-
-    if (missingFields.length > 0) {
-      setMessage(
-        `Preencha os campos obrigatórios abaixo:\n\n${missingFields
-          .map((field) => `• ${field}`)
-          .join("\n")}`,
-      );
-
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth",
-      });
-
+    if (!profile.full_name.trim()) {
+      setMessage("Informe o nome do atleta.");
       return;
     }
 
-    const normalizedProfile: AthleteProfile = {
-      ...profile,
-      full_name: (profile.full_name ?? "").trim(),
-      birth_date: profile.birth_date ?? "",
-      sex: profile.sex ?? "",
-      cycling_level:
-        profile.cycling_level || "intermediate",
-      preferred_bike: profile.preferred_bike ?? "",
-      main_cycling_type: profile.main_cycling_type ?? "",
-      terrain: profile.terrain ?? "",
-      goal: profile.goal ?? "",
-      preferred_training_time:
-        profile.preferred_training_time ?? "",
-      goal_details: profile.goal_details ?? "",
-      physical_limitations:
-        profile.physical_limitations ?? "",
-      target_event_name: profile.target_event_name ?? "",
-      target_event_date: profile.target_event_date ?? "",
-      available_days: profile.available_days ?? [],
-      available_minutes_by_day:
-        profile.available_minutes_by_day ?? {},
-      gym_days: profile.gym_days ?? [],
-      onboarding_completed: true,
-    };
+    if (!profile.goal) {
+      setMessage("Selecione o objetivo principal.");
+      return;
+    }
+
+    if (profile.available_days.length === 0) {
+      setMessage("Selecione pelo menos um dia disponível.");
+      return;
+    }
 
     try {
-      await saveMutation.mutateAsync(normalizedProfile);
-
-      setProfile(normalizedProfile);
+      await saveMutation.mutateAsync(profile);
       setMessage("Perfil salvo com sucesso!");
-
-      router.replace("/training");
-      router.refresh();
     } catch (saveError) {
       setMessage(
         saveError instanceof Error
@@ -356,7 +207,7 @@ export default function ProfilePage() {
             description="Informações básicas do atleta."
           >
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Field label="Nome completo *">
+              <Field label="Nome completo">
                 <TextInput
                   value={profile.full_name}
                   onChange={(event) =>
@@ -461,7 +312,7 @@ export default function ProfilePage() {
             description="Experiência, nível e características dos seus pedais."
           >
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Field label="Nível atual *">
+              <Field label="Nível atual">
                 <SelectInput
                   value={profile.cycling_level}
                   onChange={(event) =>
@@ -481,7 +332,7 @@ export default function ProfilePage() {
                 </SelectInput>
               </Field>
 
-              <Field label="Modalidade principal *">
+              <Field label="Modalidade principal">
                 <SelectInput
                   value={profile.main_cycling_type}
                   onChange={(event) =>
@@ -592,7 +443,7 @@ export default function ProfilePage() {
             description="A IA usará este objetivo para definir volume e intensidade."
           >
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Objetivo principal *">
+              <Field label="Objetivo principal">
                 <SelectInput
                   value={profile.goal}
                   onChange={(event) =>
@@ -727,7 +578,7 @@ export default function ProfilePage() {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {weekDays.map((day) => {
                 const selected =
-                  (profile.available_days ?? []).includes(day.value);
+                  profile.available_days.includes(day.value);
 
                 return (
                   <div
@@ -756,7 +607,8 @@ export default function ProfilePage() {
                           min="15"
                           step="5"
                           value={
-                            profile.available_minutes_by_day?.[
+                            profile
+                              .available_minutes_by_day[
                               day.value
                             ] ?? 60
                           }
@@ -816,7 +668,7 @@ export default function ProfilePage() {
                       <Checkbox
                         key={day.value}
                         label={day.label}
-                        checked={(profile.gym_days ?? []).includes(
+                        checked={profile.gym_days.includes(
                           day.value,
                         )}
                         onChange={() =>
@@ -886,16 +738,15 @@ export default function ProfilePage() {
 
           <div className="sticky bottom-4 rounded-2xl border border-slate-700 bg-slate-900/95 p-4 shadow-2xl backdrop-blur">
             {message && (
-              <div
-                role="alert"
-                className={`mb-4 whitespace-pre-line rounded-xl border p-4 text-sm ${
+              <p
+                className={`mb-3 text-sm ${
                   message.includes("sucesso")
-                    ? "border-emerald-500/60 bg-emerald-950/70 text-emerald-300"
-                    : "border-red-500/60 bg-red-950/70 text-red-300"
+                    ? "text-emerald-400"
+                    : "text-red-400"
                 }`}
               >
                 {message}
-              </div>
+              </p>
             )}
 
             <button
@@ -964,42 +815,36 @@ function Field({
   );
 }
 
-function TextInput({
-  value,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(
+  props: InputHTMLAttributes<HTMLInputElement>,
+) {
   return (
     <input
       {...props}
-      value={value ?? ""}
       className={`w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 ${props.className ?? ""}`}
     />
   );
 }
 
-function SelectInput({
-  value,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function SelectInput(
+  props: React.SelectHTMLAttributes<HTMLSelectElement>,
+) {
   return (
     <select
       {...props}
-      value={value ?? ""}
       className={`w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-emerald-500 ${props.className ?? ""}`}
     />
   );
 }
 
-function TextArea({
-  value,
-  ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function TextArea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+) {
   return (
     <textarea
       {...props}
-      value={value ?? ""}
       rows={4}
-      className={`w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-emerald-500 ${props.className ?? ""}`}
+      className={`w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 ${props.className ?? ""}`}
     />
   );
 }

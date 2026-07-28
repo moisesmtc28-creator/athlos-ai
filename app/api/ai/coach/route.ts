@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { askGeminiText } from "@/app/services/ai-provider";
+import { askGemini } from "@/app/services/ai-provider";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -170,7 +170,7 @@ PERGUNTA DO ATLETA
 ${message}
 `;
 
-    const answer = await askGeminiText(prompt);
+    const answer = await askGemini(prompt);
 
     return NextResponse.json({ answer });
   } catch (error) {

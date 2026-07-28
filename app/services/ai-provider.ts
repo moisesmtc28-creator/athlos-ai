@@ -9,7 +9,9 @@ if (!apiKey) {
   );
 }
 
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({
+  apiKey,
+});
 
 export async function askGemini(prompt: string): Promise<string> {
   const response = await ai.models.generateContent({
@@ -17,7 +19,7 @@ export async function askGemini(prompt: string): Promise<string> {
     contents: prompt,
     config: {
       responseMimeType: "application/json",
-      temperature: 0.35,
+      temperature: 0.4,
     },
   });
 
@@ -25,24 +27,6 @@ export async function askGemini(prompt: string): Promise<string> {
 
   if (!text) {
     throw new Error("O Gemini retornou uma resposta vazia.");
-  }
-
-  return text;
-}
-
-export async function askGeminiText(prompt: string): Promise<string> {
-  const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
-    contents: prompt,
-    config: {
-      temperature: 0.45,
-    },
-  });
-
-  const text = response.text?.trim();
-
-  if (!text) {
-    throw new Error("O treinador retornou uma resposta vazia.");
   }
 
   return text;

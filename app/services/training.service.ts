@@ -12,6 +12,26 @@ type TrainingSessionRow = {
 };
 
 export async function getTrainings(): Promise<Training[]> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) throw new Error(userError.message);
+  if (!user) throw new Error("Usuário não autenticado.");
+
+  const { data: profile, error: profileError } = await supabase
+    .from("athlete_profiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(`Erro ao localizar o perfil: ${profileError.message}`);
+  }
+
+  if (!profile) return [];
+
   const { data, error } = await supabase
     .from("training_sessions")
     .select(`
@@ -23,6 +43,7 @@ export async function getTrainings(): Promise<Training[]> {
       zone,
       status
     `)
+    .eq("profile_id", profile.id)
     .order("scheduled_date", { ascending: true });
 
   if (error) {

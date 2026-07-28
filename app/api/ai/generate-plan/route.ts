@@ -322,17 +322,61 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingPlan) {
-      return NextResponse.json(
-        {
-          error: `Já existe um plano para o período de ${formatBrazilianDate(
-            startDate,
-          )} a ${formatBrazilianDate(endDate)}.`,
-          existingPlanId: existingPlan.id,
-        },
-        {
-          status: 409,
-        },
-      );
+      const { data: existingSessions, error: sessionsError } =
+        await supabase
+          .from("training_sessions")
+          .select(`
+            id,
+            title,
+            description,
+            scheduled_date,
+            duration_minutes,
+            zone,
+            status
+          `)
+          .eq("plan_id", existingPlan.id)
+          .order("scheduled_date", { ascending: true });
+
+      if (sessionsError) {
+        throw new Error(
+          `Erro ao carregar o plano existente: ${sessionsError.message}`,
+        );
+      }
+
+      if (existingSessions?.length) {
+        const existingTrainings: Training[] = existingSessions.map(
+          (session) => ({
+            id: session.id,
+            title: session.title,
+            description: session.description ?? "",
+            date: session.scheduled_date,
+            duration: session.duration_minutes,
+            zone: session.zone as Training["zone"],
+            status: session.status as Training["status"],
+          }),
+        );
+
+        return NextResponse.json({
+          planId: existingPlan.id,
+          weekGoal: existingPlan.title,
+          trainings: existingTrainings,
+          historyAnalyzed: 0,
+          plannedWeek: { start: startDate, end: endDate },
+          reusedExistingPlan: true,
+        });
+      }
+
+      // Remove plano incompleto deixado por uma tentativa anterior.
+      const { error: deleteStalePlanError } = await supabase
+        .from("training_plans")
+        .delete()
+        .eq("id", existingPlan.id);
+
+      if (deleteStalePlanError) {
+        throw new Error(
+          `Existe um plano incompleto e ele não pôde ser corrigido: ${deleteStalePlanError.message}`,
+        );
+      }
     }
 
     /*
