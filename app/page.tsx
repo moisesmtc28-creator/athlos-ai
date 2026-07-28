@@ -1,11 +1,32 @@
+"use client";
+
 import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
 import TrainingCard from "./components/cards/TrainingCard";
 import StatCard from "./components/cards/StatCard";
 import CoachCard from "./components/cards/CoachCard";
 import WeightChart from "./components/charts/WeightChart";
+import { useAthlete } from "./hooks/use-athlete";
 
 export default function Home() {
+  const { data: athlete, isLoading, isError } = useAthlete();
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+        Carregando Athlos AI...
+      </main>
+    );
+  }
+
+  if (isError || !athlete) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+        Não foi possível carregar os dados do atleta.
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen bg-zinc-950 text-white">
       <Sidebar />
@@ -13,12 +34,10 @@ export default function Home() {
       <section className="flex-1 overflow-y-auto p-8">
         <Header />
 
-        {/* Treino */}
         <div className="mt-8">
           <TrainingCard />
         </div>
 
-        {/* Cards */}
         <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon="❤️"
@@ -30,8 +49,8 @@ export default function Home() {
           <StatCard
             icon="⚖️"
             title="Peso"
-            value="120 kg"
-            subtitle="Meta: 105 kg"
+            value={`${athlete.currentWeight} kg`}
+            subtitle={`Meta: ${athlete.goalWeight} kg`}
           />
 
           <StatCard
@@ -49,7 +68,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Gráfico + Coach */}
         <div className="mt-6 grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <WeightChart />
