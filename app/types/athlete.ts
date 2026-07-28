@@ -1,5 +1,5 @@
-export interface Athlete {
-  id: string;
+export type Athlete = {
+  id?: string;
 
   name: string;
 
@@ -7,7 +7,7 @@ export interface Athlete {
 
   height: number;
 
-  weight: number;
+  currentWeight: number;
 
   goalWeight: number;
 
@@ -15,9 +15,11 @@ export interface Athlete {
 
   ftp?: number;
 
-  goal:
-    | "Emagrecer"
-    | "Performance"
-    | "Competição"
-    | "Lazer";
-}
+  restingHeartRate?: number;
+
+  bike?: string;
+
+  createdAt?: string;
+
+  updatedAt?: string;
+};
