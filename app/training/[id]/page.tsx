@@ -280,7 +280,7 @@ function TrainingDetailsForm({
     (rpeValue < 1 || rpeValue > 10);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-6 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-5xl">
         <button
           type="button"

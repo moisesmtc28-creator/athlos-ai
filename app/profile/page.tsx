@@ -184,7 +184,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white md:px-8">
+    <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-6 text-white md:px-8">
       <div className="mx-auto max-w-6xl">
         <header className="mb-8">
           <p className="text-sm font-semibold uppercase tracking-wider text-emerald-400">

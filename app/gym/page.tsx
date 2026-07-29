@@ -6,8 +6,8 @@ import { useAthleteProfile } from "../hooks/use-athlete-profile";
 export default function GymPage() {
   const { data: profile, isLoading } = useAthleteProfile();
   const days = profile?.gym_days ?? [];
-  return <main className="flex min-h-screen bg-zinc-950 text-white"><Sidebar />
-    <section className="min-w-0 flex-1 p-5 md:p-8"><div className="mx-auto max-w-5xl">
+  return <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0"><Sidebar />
+    <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8"><div className="mx-auto max-w-5xl">
       <h1 className="text-3xl font-bold">Academia</h1><p className="mt-2 text-zinc-400">Organização do treino de força junto com o ciclismo.</p>
       {isLoading ? <p className="mt-8">Carregando...</p> : !profile?.does_strength_training ? <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-8"><h2 className="text-xl font-semibold">Musculação não ativada</h2><p className="mt-2 text-zinc-400">Ative essa opção no Perfil para integrar a academia ao plano.</p></div> : <>
         <div className="mt-8 grid gap-4 md:grid-cols-3"><Metric title="Dias por semana" value={String(profile.strength_days_per_week ?? days.length)} /><Metric title="Dias cadastrados" value={String(days.length)} /><Metric title="Prioridade" value="Força útil" /></div>
