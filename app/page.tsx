@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   Bike,
@@ -18,10 +20,100 @@ import TrainingCard from "./components/cards/TrainingCard";
 import StatCard from "./components/cards/StatCard";
 import CoachCard from "./components/cards/CoachCard";
 import WeightChart from "./components/charts/WeightChart";
+
 import { useAthlete } from "./hooks/use-athlete";
+import { supabase } from "./lib/supabase";
 
 export default function Home() {
-  const { data: athlete, isLoading, isError, refetch } = useAthlete();
+  const router = useRouter();
+
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkSession() {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error || !session) {
+          setIsAuthenticated(false);
+          setSessionChecked(true);
+          router.replace("/login");
+          return;
+        }
+
+        setIsAuthenticated(true);
+        setSessionChecked(true);
+      } catch (error) {
+        console.error("Erro ao verificar sessão:", error);
+
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setSessionChecked(true);
+          router.replace("/login");
+        }
+      }
+    }
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (!session) {
+        setIsAuthenticated(false);
+        setSessionChecked(true);
+        router.replace("/login");
+        return;
+      }
+
+      setIsAuthenticated(true);
+      setSessionChecked(true);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  if (!sessionChecked || !isAuthenticated) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-white">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-400" />
+
+          <p className="mt-4 text-sm text-zinc-400">
+            Verificando acesso...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return <AuthenticatedDashboard />;
+}
+
+function AuthenticatedDashboard() {
+  const {
+    data: athlete,
+    isLoading,
+    isError,
+    refetch,
+  } = useAthlete();
 
   if (isLoading) {
     return (
@@ -210,17 +302,19 @@ export default function Home() {
   );
 }
 
+type QuickStatusProps = {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  description: string;
+};
+
 function QuickStatus({
   icon,
   title,
   value,
   description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  description: string;
-}) {
+}: QuickStatusProps) {
   return (
     <article className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
