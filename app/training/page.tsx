@@ -41,7 +41,7 @@ export default function TrainingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-6 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
 
         <header className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">

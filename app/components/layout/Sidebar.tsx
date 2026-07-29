@@ -30,7 +30,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="h-screen w-72 border-r border-zinc-800 bg-zinc-900 p-6">
+    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-zinc-800 bg-zinc-900 p-6 lg:block">
       <h1 className="mb-10 text-3xl font-bold text-green-500">
         🚴 Athlos AI
       </h1>

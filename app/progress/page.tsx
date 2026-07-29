@@ -12,8 +12,8 @@ export default function ProgressPage() {
   const completedMinutes = completed.reduce((sum, t) => sum + t.duration, 0);
   const adherence = trainings.length ? Math.round((completed.length / trainings.length) * 100) : 0;
 
-  return <main className="flex min-h-screen bg-zinc-950 text-white"><Sidebar />
-    <section className="min-w-0 flex-1 p-5 md:p-8"><div className="mx-auto max-w-6xl">
+  return <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0"><Sidebar />
+    <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8"><div className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold">Evolução</h1><p className="mt-2 text-zinc-400">Resumo do seu progresso com base nos treinos registrados.</p>
       {isLoading ? <p className="mt-8">Carregando...</p> : <>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

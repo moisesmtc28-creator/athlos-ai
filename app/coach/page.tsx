@@ -27,9 +27,9 @@ export default function CoachPage() {
   const canGenerate = Boolean(profile?.onboarding_completed);
 
   return (
-    <main className="flex min-h-screen bg-zinc-950 text-white">
+    <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0">
       <Sidebar />
-      <section className="min-w-0 flex-1 p-5 md:p-8">
+      <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8">
         <div className="mx-auto max-w-5xl">
           <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/70 to-zinc-900 p-6 md:p-10">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-zinc-950">

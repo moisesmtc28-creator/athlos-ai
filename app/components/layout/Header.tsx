@@ -6,9 +6,9 @@ export default function Header() {
   const { data: athlete } = useAthlete();
 
   return (
-    <header className="flex items-center justify-between border-b border-zinc-800 pb-6">
+    <header className="flex items-center justify-between gap-4 border-b border-zinc-800 pb-5">
       <div>
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">
           Bom dia, {athlete?.name ?? "Atleta"} 👋
         </h1>
 

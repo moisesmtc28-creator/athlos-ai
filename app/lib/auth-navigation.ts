@@ -1,16 +1,18 @@
 import { supabase } from "./supabase";
 
 export async function getAuthenticatedDestination(): Promise<
-  "/" | "/profile"
+  "/" | "/profile" | "/login"
 > {
   const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-  if (userError || !user) {
-    return "/profile";
+  if (sessionError || !session) {
+    return "/login";
   }
+
+  const user = session.user;
 
   const { data, error } = await supabase
     .from("athlete_profiles")
@@ -19,9 +21,15 @@ export async function getAuthenticatedDestination(): Promise<
     .maybeSingle();
 
   if (error) {
-    console.error("Erro ao verificar perfil:", error);
+    console.error(
+      "Erro ao verificar perfil:",
+      error,
+    );
+
     return "/profile";
   }
 
-  return data?.onboarding_completed ? "/" : "/profile";
+  return data?.onboarding_completed
+    ? "/"
+    : "/profile";
 }
