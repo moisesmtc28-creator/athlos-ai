@@ -23,7 +23,7 @@ const menu = [
   {
     icon: Bike,
     label: "Treinos",
-    href: "/trainings",
+    href: "/training",
   },
   {
     icon: CalendarDays,
@@ -106,7 +106,10 @@ export default function Sidebar() {
         <div className="mt-7 rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-              <Bike className="text-emerald-400" size={20} />
+              <Bike
+                className="text-emerald-400"
+                size={20}
+              />
             </div>
 
             <div>
@@ -130,7 +133,9 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={
+                  isActive ? "page" : undefined
+                }
                 className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                   isActive
                     ? "bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/10"
@@ -176,7 +181,9 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={
+                  isActive ? "page" : undefined
+                }
                 className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-2.5 text-center transition ${
                   isActive
                     ? "bg-emerald-400 text-zinc-950"
