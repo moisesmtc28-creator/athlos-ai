@@ -1,3 +1,7 @@
+"use client";
+
+import { ArrowUpRight } from "lucide-react";
+
 interface StatCardProps {
   title: string;
   value: string;
@@ -12,20 +16,31 @@ export default function StatCard({
   icon,
 }: StatCardProps) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg">
-      <div className="text-2xl">{icon}</div>
+    <article className="group overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-lg transition hover:-translate-y-1 hover:border-emerald-500/20">
+      <div className="flex items-start justify-between">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl">
+          {icon ?? "📊"}
+        </div>
 
-      <p className="mt-3 text-sm text-zinc-400">{title}</p>
+        <ArrowUpRight
+          size={18}
+          className="text-zinc-600 transition group-hover:text-emerald-400"
+        />
+      </div>
 
-      <h3 className="mt-1 text-3xl font-bold text-white">
+      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        {title}
+      </p>
+
+      <h3 className="mt-2 text-3xl font-black text-white">
         {value}
       </h3>
 
       {subtitle && (
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
           {subtitle}
         </p>
       )}
-    </div>
+    </article>
   );
 }
