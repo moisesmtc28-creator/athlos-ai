@@ -1,16 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import {
   FormEvent,
   useEffect,
   useState,
 } from "react";
-
 import { useRouter } from "next/navigation";
 
 import { supabase } from "../lib/supabase";
 import { getAuthenticatedDestination } from "../lib/auth-navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,14 +31,34 @@ export default function LoginPage() {
     useState<"success" | "error" | "">("");
 
   useEffect(() => {
+    let isMounted = true;
+
     async function checkSession() {
       try {
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
 
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          console.error(
+            "Erro ao verificar sessão:",
+            error,
+          );
+        }
+
         if (session) {
-          const destination = await getAuthenticatedDestination();
+          const destination =
+            await getAuthenticatedDestination();
+
+          if (!isMounted) {
+            return;
+          }
+
           router.replace(destination);
           return;
         }
@@ -49,11 +68,17 @@ export default function LoginPage() {
           error,
         );
       } finally {
-        setIsCheckingSession(false);
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
       }
     }
 
-    checkSession();
+    void checkSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   async function handleLogin(
@@ -99,10 +124,12 @@ export default function LoginPage() {
         );
       }
 
+      const destination =
+        await getAuthenticatedDestination();
+
       setMessage("Login realizado com sucesso!");
       setMessageType("success");
 
-      const destination = await getAuthenticatedDestination();
       router.replace(destination);
       router.refresh();
     } catch (error) {
@@ -113,19 +140,50 @@ export default function LoginPage() {
           ? error.message
           : "Não foi possível entrar.";
 
+      const normalizedError =
+        errorMessage.toLowerCase();
+
       if (
-        errorMessage
-          .toLowerCase()
-          .includes("invalid login credentials")
+        normalizedError.includes(
+          "invalid login credentials",
+        )
       ) {
         setMessage("E-mail ou senha incorretos.");
       } else if (
-        errorMessage
-          .toLowerCase()
-          .includes("email not confirmed")
+        normalizedError.includes(
+          "email not confirmed",
+        )
       ) {
         setMessage(
           "Confirme seu e-mail antes de entrar.",
+        );
+      } else if (
+        normalizedError.includes(
+          "too many requests",
+        ) ||
+        normalizedError.includes("rate limit")
+      ) {
+        setMessage(
+          "Foram feitas muitas tentativas. Aguarde alguns minutos e tente novamente.",
+        );
+      } else if (
+        normalizedError.includes(
+          "user not found",
+        )
+      ) {
+        setMessage(
+          "Não encontramos uma conta com este e-mail.",
+        );
+      } else if (
+        normalizedError.includes(
+          "failed to fetch",
+        ) ||
+        normalizedError.includes(
+          "network request failed",
+        )
+      ) {
+        setMessage(
+          "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.",
         );
       } else {
         setMessage(errorMessage);
@@ -153,12 +211,12 @@ export default function LoginPage() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
-      <div className="absolute left-[-100px] top-[-100px] h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute left-[-100px] top-[-100px] h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
 
-      <div className="absolute bottom-[-100px] right-[-100px] h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-[-100px] right-[-100px] h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
 
       <div className="relative w-full max-w-md">
-        <div className="mb-8 text-center">
+        <header className="mb-8 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500 text-3xl font-black text-slate-950 shadow-lg shadow-emerald-500/20">
             A
           </div>
@@ -171,11 +229,11 @@ export default function LoginPage() {
             Bem-vindo
           </h1>
 
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm leading-6 text-slate-400">
             Entre para acessar seus treinos e seu
             perfil de atleta.
           </p>
-        </div>
+        </header>
 
         <form
           onSubmit={handleLogin}
@@ -199,9 +257,10 @@ export default function LoginPage() {
                 }
                 placeholder="seuemail@exemplo.com"
                 autoComplete="email"
+                inputMode="email"
                 disabled={isLoading}
                 required
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
               />
             </div>
 
@@ -229,7 +288,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   disabled={isLoading}
                   required
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 pr-20 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 pr-20 text-base text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                 />
 
                 <button
@@ -240,7 +299,12 @@ export default function LoginPage() {
                     )
                   }
                   disabled={isLoading}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:text-emerald-400 disabled:cursor-not-allowed"
+                  aria-label={
+                    showPassword
+                      ? "Ocultar senha"
+                      : "Mostrar senha"
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {showPassword
                     ? "Ocultar"
@@ -253,10 +317,11 @@ export default function LoginPage() {
           {message && (
             <div
               role="alert"
-              className={`mt-5 rounded-xl border px-4 py-3 text-sm ${
+              aria-live="polite"
+              className={`mt-5 rounded-xl border px-4 py-3 text-sm leading-6 ${
                 messageType === "success"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                  : "border-red-500/30 bg-red-500/10 text-red-400"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-red-500/30 bg-red-500/10 text-red-300"
               }`}
             >
               {message}
@@ -266,7 +331,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-6 flex w-full items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? (
               <>
@@ -279,13 +344,20 @@ export default function LoginPage() {
           </button>
 
           <div className="mt-6 space-y-3 text-center text-sm">
-            <Link href="/forgot-password" className="block text-slate-400 transition hover:text-emerald-400">
+            <Link
+              href="/forgot-password"
+              className="block text-slate-400 transition hover:text-emerald-400"
+            >
               Esqueci minha senha
             </Link>
+
             <p className="text-slate-500">
               Ainda não possui conta?{" "}
-              <Link href="/register" className="font-semibold text-emerald-400 hover:text-emerald-300">
-                Criar conta
+              <Link
+                href="/register"
+                className="font-semibold text-emerald-400 transition hover:text-emerald-300"
+              >
+                Solicitar cadastro
               </Link>
             </p>
           </div>

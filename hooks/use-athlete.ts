@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getAthlete } from "@/app/services/athlete.service";
+import { getAthlete } from "../services/athlete.service";
 
 export function useAthlete() {
   return useQuery({

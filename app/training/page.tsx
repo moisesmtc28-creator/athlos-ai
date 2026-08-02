@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 
-import { useTrainings } from "@/app/hooks/use-trainings";
+import { useTrainings } from "@/hooks/use-trainings";
 import type {
   TrainingStatus,
   TrainingZone,
-} from "@/app/types/training";
+} from "@/types/training";
 
 export default function TrainingPage() {
   const {

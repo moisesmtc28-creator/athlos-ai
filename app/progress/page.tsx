@@ -1,8 +1,8 @@
 "use client";
 
 import Sidebar from "../components/layout/Sidebar";
-import { useTrainings } from "../hooks/use-trainings";
-import { useAthleteProfile } from "../hooks/use-athlete-profile";
+import { useTrainings } from "@/hooks/use-trainings";
+import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 
 export default function ProgressPage() {
   const { data: trainings = [], isLoading } = useTrainings();

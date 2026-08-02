@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { askGemini } from "@/app/services/ai-provider";
+import { askGemini } from "@/services/ai-provider";
 
 type ChatMessage = {
   role: "user" | "assistant";

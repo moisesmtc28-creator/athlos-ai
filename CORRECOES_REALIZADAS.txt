@@ -1,0 +1,20 @@
+ATHLOS AI - CORREÇÕES REALIZADAS
+
+- Imports de hooks, services e types ajustados para a estrutura atual.
+- Imports de tipos antigos em app/data e services corrigidos.
+- Provedor do Gemini alterado para validar GEMINI_API_KEY somente durante a chamada da API, evitando falha no build.
+- Build de produção validado com sucesso no Next.js 16.2.12.
+
+Comando validado:
+node node_modules/next/dist/bin/next build
+
+No seu ambiente, use normalmente:
+npm install
+npm run build
+
+Antes de publicar na Vercel, configure:
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+GEMINI_API_KEY
+
+O arquivo .env.local não foi incluído neste pacote por segurança.

@@ -1,5 +1,4 @@
-import { supabase } from "../lib/supabase";
-
+import { supabase } from "@/app/lib/supabase";
 import type { AthleteProfile } from "../types/athlete-profile";
 
 function optionalText(

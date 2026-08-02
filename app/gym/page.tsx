@@ -1,8 +1,7 @@
 "use client";
 
 import Sidebar from "../components/layout/Sidebar";
-import { useAthleteProfile } from "../hooks/use-athlete-profile";
-
+import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 export default function GymPage() {
   const { data: profile, isLoading } = useAthleteProfile();
   const days = profile?.gym_days ?? [];

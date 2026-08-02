@@ -5,9 +5,8 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, CalendarDays, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import Sidebar from "../components/layout/Sidebar";
-import { useAiCoach } from "../hooks/use-ai-coach";
-import { useAthleteProfile } from "../hooks/use-athlete-profile";
-
+import { useAiCoach } from "@/hooks/use-ai-coach";
+import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 export default function CoachPage() {
   const router = useRouter();
   const profileQuery = useAthleteProfile();

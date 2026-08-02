@@ -1,8 +1,7 @@
 "use client";
 
 import Sidebar from "../components/layout/Sidebar";
-import { useAthleteProfile } from "../hooks/use-athlete-profile";
-
+import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 export default function NutritionPage() {
   const { data: profile, isLoading } = useAthleteProfile();
   const weight = profile?.current_weight ?? null;

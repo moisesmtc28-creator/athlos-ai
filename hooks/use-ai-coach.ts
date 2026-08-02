@@ -1,8 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { generateWeeklyPlan } from "@/app/services/ai-coach.service";
-
+import { generateWeeklyPlan } from "@/services/ai-coach.service";
 export function useAiCoach() {
   const queryClient = useQueryClient();
 

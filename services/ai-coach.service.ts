@@ -1,5 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
-import type { Training } from "@/app/types/training";
+import type { Training } from "@/types/training";
 
 type GeneratePlanResponse = {
   planId: string;

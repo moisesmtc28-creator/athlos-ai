@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   updateTraining,
   type UpdateTrainingInput,
-} from "@/app/services/training-update.service";
+} from "@/services/training-update.service";
 
 export function useUpdateTraining() {
   const queryClient = useQueryClient();

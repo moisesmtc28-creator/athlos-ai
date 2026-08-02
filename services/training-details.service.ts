@@ -1,5 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
-import type { TrainingDetails } from "@/app/types/training";
+import type { TrainingDetails } from "@/types/training";
 
 export async function getTrainingById(
   id: string,

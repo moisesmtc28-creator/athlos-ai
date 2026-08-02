@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Sidebar from "../components/layout/Sidebar";
-import { useTrainings } from "../hooks/use-trainings";
+import { useTrainings } from "@/hooks/use-trainings";
 
 const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 

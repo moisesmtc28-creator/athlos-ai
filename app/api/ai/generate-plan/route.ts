@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { askGemini } from "@/app/services/ai-provider";
-import type { Training } from "@/app/types/training";
+import { askGemini } from "@/services/ai-provider";
+import type { Training } from "@/types/training";
 
 type AthleteProfile = {
   id: string;

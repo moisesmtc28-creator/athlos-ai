@@ -1,5 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
-import type { Athlete } from "@/app/types/athlete";
+import type { Athlete } from "@/types/athlete";
 
 function calculateAge(birthDate: string | null): number {
   if (!birthDate) return 0;

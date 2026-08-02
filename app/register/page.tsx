@@ -44,10 +44,18 @@ export default function RegisterPage() {
       try {
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
 
         if (!isMounted) {
           return;
+        }
+
+        if (error) {
+          console.error(
+            "Erro ao verificar sessão:",
+            error,
+          );
         }
 
         if (session) {
@@ -76,6 +84,32 @@ export default function RegisterPage() {
     };
   }, [router]);
 
+  async function createPendingProfile(
+    userId: string,
+    fullName: string,
+  ) {
+    const { error } = await supabase
+      .from("athlete_profiles")
+      .upsert(
+        {
+          user_id: userId,
+          full_name: fullName,
+          onboarding_completed: false,
+          status: "pending",
+          role: "athlete",
+        },
+        {
+          onConflict: "user_id",
+        },
+      );
+
+    if (error) {
+      throw new Error(
+        `Conta criada, mas não foi possível criar o perfil: ${error.message}`,
+      );
+    }
+  }
+
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -91,9 +125,7 @@ export default function RegisterPage() {
       .toLowerCase();
 
     if (normalizedName.length < 3) {
-      setMessage(
-        "Informe seu nome completo.",
-      );
+      setMessage("Informe seu nome completo.");
       setMessageType("error");
       return;
     }
@@ -113,9 +145,7 @@ export default function RegisterPage() {
     }
 
     if (password !== confirmPassword) {
-      setMessage(
-        "As senhas não são iguais.",
-      );
+      setMessage("As senhas não são iguais.");
       setMessageType("error");
       return;
     }
@@ -147,39 +177,29 @@ export default function RegisterPage() {
       }
 
       /*
-       * Quando a confirmação de e-mail estiver desativada
-       * no Supabase, o cadastro já retorna uma sessão.
-       * Nesse caso, criamos o perfil imediatamente.
+       * Se a confirmação de e-mail estiver desativada,
+       * o Supabase devolve uma sessão imediatamente.
+       * Nesse caso, o perfil pendente é criado agora.
        */
       if (data.session) {
-        const { error: profileError } =
-          await supabase
-            .from("athlete_profiles")
-            .upsert(
-              {
-                user_id: data.user.id,
-                full_name: normalizedName,
-                onboarding_completed: false,
-              },
-              {
-                onConflict: "user_id",
-              },
-            );
+        await createPendingProfile(
+          data.user.id,
+          normalizedName,
+        );
 
-        if (profileError) {
-          console.error(
-            "Erro ao criar perfil:",
-            profileError,
-          );
-        }
-
-        router.replace("/profile");
+        router.replace("/pending");
         router.refresh();
         return;
       }
 
+      /*
+       * Quando a confirmação de e-mail está ativada,
+       * ainda não existe sessão autenticada.
+       * O perfil deverá ser criado após a confirmação
+       * e o primeiro login.
+       */
       setMessage(
-        "Conta criada com sucesso. Verifique seu e-mail para confirmar o cadastro.",
+        "Cadastro realizado com sucesso. Confirme seu e-mail e depois entre no Athlos AI. Seu acesso ficará aguardando a aprovação do administrador.",
       );
 
       setMessageType("success");
@@ -212,9 +232,7 @@ export default function RegisterPage() {
           "Este e-mail já possui uma conta.",
         );
       } else if (
-        normalizedError.includes(
-          "invalid email",
-        )
+        normalizedError.includes("invalid email")
       ) {
         setMessage(
           "Informe um endereço de e-mail válido.",
@@ -234,6 +252,17 @@ export default function RegisterPage() {
       ) {
         setMessage(
           "A criação de novas contas está desativada no Supabase.",
+        );
+      } else if (
+        normalizedError.includes(
+          "row-level security",
+        ) ||
+        normalizedError.includes(
+          "violates row-level security",
+        )
+      ) {
+        setMessage(
+          "A conta foi criada, mas o banco bloqueou a criação do perfil. Precisamos ajustar a política RLS da tabela athlete_profiles.",
         );
       } else {
         setMessage(errorMessage);
@@ -280,9 +309,8 @@ export default function RegisterPage() {
           </h1>
 
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-400">
-            Cadastre-se para organizar seus treinos,
-            acompanhar sua evolução e usar o treinador
-            inteligente.
+            Cadastre-se para solicitar acesso ao
+            treinador inteligente de ciclismo.
           </p>
         </header>
 
@@ -290,6 +318,14 @@ export default function RegisterPage() {
           onSubmit={handleSubmit}
           className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-2xl backdrop-blur sm:p-7"
         >
+          <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm leading-6 text-amber-200">
+              Todo novo cadastro precisa ser aprovado
+              pelo administrador antes do primeiro
+              acesso.
+            </p>
+          </div>
+
           <div className="space-y-5">
             <Field
               label="Nome completo"
@@ -428,7 +464,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            Ao criar sua conta, você poderá preencher
+            Depois da aprovação, você poderá preencher
             seus dados de atleta e receber treinos
             personalizados.
           </p>
@@ -455,10 +491,10 @@ export default function RegisterPage() {
             {loading ? (
               <>
                 <span className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />
-                Criando conta...
+                Enviando cadastro...
               </>
             ) : (
-              "Criar conta"
+              "Solicitar cadastro"
             )}
           </button>
 

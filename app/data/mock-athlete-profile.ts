@@ -1,4 +1,4 @@
-import type { AthleteProfile } from "@/app/types/athlete-profile";
+import type { AthleteProfile } from "@/types/athlete-profile";
 
 export const mockAthleteProfile: AthleteProfile = {
   id: "mock-profile-1",

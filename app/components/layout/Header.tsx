@@ -1,6 +1,6 @@
 "use client";
 
-import { useAthlete } from "@/app/hooks/use-athlete";
+import { useAthlete } from "../../../hooks/use-athlete";
 
 export default function Header() {
   const { data: athlete } = useAthlete();

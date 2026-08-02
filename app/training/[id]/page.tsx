@@ -8,13 +8,12 @@ import {
 
 import { useParams, useRouter } from "next/navigation";
 
-import { useTraining } from "@/app/hooks/use-training";
-import { useUpdateTraining } from "@/app/hooks/use-update-training";
-
+import { useTraining } from "@/hooks/use-training";
+import { useUpdateTraining } from "@/hooks/use-update-training";
 import type {
   TrainingStatus,
   TrainingZone,
-} from "@/app/types/training";
+} from "@/types/training";
 
 type FormState = {
   status: TrainingStatus;

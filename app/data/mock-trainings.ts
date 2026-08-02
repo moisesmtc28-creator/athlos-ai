@@ -1,5 +1,4 @@
-import { Training } from "@/app/types/training";
-
+import type { Training } from "@/types/training";
 export const mockTrainings: Training[] = [
   {
     id: "1",

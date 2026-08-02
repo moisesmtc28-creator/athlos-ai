@@ -21,68 +21,109 @@ import StatCard from "./components/cards/StatCard";
 import CoachCard from "./components/cards/CoachCard";
 import WeightChart from "./components/charts/WeightChart";
 
-import { useAthlete } from "./hooks/use-athlete";
+import { useAthlete } from "../hooks/use-athlete";
 import { supabase } from "./lib/supabase";
+import { getAuthenticatedDestination } from "./lib/auth-navigation";
 
 export default function Home() {
   const router = useRouter();
 
-  const [sessionChecked, setSessionChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accessChecked, setAccessChecked] =
+    useState(false);
+
+  const [hasAccess, setHasAccess] =
+    useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function checkSession() {
+    async function verifyAccess() {
       try {
         const {
           data: { session },
-          error,
+          error: sessionError,
         } = await supabase.auth.getSession();
 
         if (!isMounted) {
           return;
         }
 
-        if (error || !session) {
-          setIsAuthenticated(false);
-          setSessionChecked(true);
+        if (sessionError || !session) {
+          setHasAccess(false);
+          setAccessChecked(true);
           router.replace("/login");
           return;
         }
 
-        setIsAuthenticated(true);
-        setSessionChecked(true);
+        const destination =
+          await getAuthenticatedDestination();
+
+        if (!isMounted) {
+          return;
+        }
+
+        /*
+         * A página inicial só pode ser acessada quando
+         * o destino autorizado do usuário for "/".
+         */
+        if (destination !== "/") {
+          setHasAccess(false);
+          setAccessChecked(true);
+          router.replace(destination);
+          return;
+        }
+
+        setHasAccess(true);
+        setAccessChecked(true);
       } catch (error) {
-        console.error("Erro ao verificar sessão:", error);
+        console.error(
+          "Erro ao verificar acesso:",
+          error,
+        );
 
         if (isMounted) {
-          setIsAuthenticated(false);
-          setSessionChecked(true);
+          setHasAccess(false);
+          setAccessChecked(true);
           router.replace("/login");
         }
       }
     }
 
-    void checkSession();
+    void verifyAccess();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) {
-        return;
-      }
+    } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (!isMounted) {
+          return;
+        }
 
-      if (!session) {
-        setIsAuthenticated(false);
-        setSessionChecked(true);
-        router.replace("/login");
-        return;
-      }
+        if (!session) {
+          setHasAccess(false);
+          setAccessChecked(true);
+          router.replace("/login");
+          return;
+        }
 
-      setIsAuthenticated(true);
-      setSessionChecked(true);
-    });
+        const destination =
+          await getAuthenticatedDestination();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (destination !== "/") {
+          setHasAccess(false);
+          setAccessChecked(true);
+          router.replace(destination);
+          return;
+        }
+
+        setHasAccess(true);
+        setAccessChecked(true);
+      },
+    );
 
     return () => {
       isMounted = false;
@@ -90,7 +131,7 @@ export default function Home() {
     };
   }, [router]);
 
-  if (!sessionChecked || !isAuthenticated) {
+  if (!accessChecked || !hasAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-white">
         <div className="text-center">
@@ -134,7 +175,10 @@ function AuthenticatedDashboard() {
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-white">
         <div className="w-full max-w-md rounded-3xl border border-red-500/20 bg-zinc-900 p-6 text-center shadow-2xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10">
-            <Activity className="text-red-400" size={26} />
+            <Activity
+              className="text-red-400"
+              size={26}
+            />
           </div>
 
           <h1 className="mt-5 text-xl font-bold">
@@ -157,9 +201,18 @@ function AuthenticatedDashboard() {
     );
   }
 
-  const currentWeight = Number(athlete.currentWeight ?? 0);
-  const goalWeight = Number(athlete.goalWeight ?? 0);
-  const remainingWeight = Math.max(currentWeight - goalWeight, 0);
+  const currentWeight = Number(
+    athlete.currentWeight ?? 0,
+  );
+
+  const goalWeight = Number(
+    athlete.goalWeight ?? 0,
+  );
+
+  const remainingWeight = Math.max(
+    currentWeight - goalWeight,
+    0,
+  );
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white lg:flex">
@@ -179,22 +232,27 @@ function AuthenticatedDashboard() {
 
                 <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight sm:text-4xl">
                   Consistência hoje.
+
                   <span className="block text-emerald-400">
                     Performance amanhã.
                   </span>
                 </h1>
 
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                  Acompanhe seu treino, recuperação e evolução em um só lugar.
-                  O Athlos AI organiza sua rotina para você treinar com mais
-                  segurança e propósito.
+                  Acompanhe seu treino, recuperação e
+                  evolução em um só lugar. O Athlos AI
+                  organiza sua rotina para você treinar
+                  com mais segurança e propósito.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                    <TrendingDown className="text-emerald-400" size={20} />
+                    <TrendingDown
+                      className="text-emerald-400"
+                      size={20}
+                    />
                   </div>
 
                   <p className="mt-4 text-xs uppercase tracking-wider text-zinc-500">
@@ -202,13 +260,19 @@ function AuthenticatedDashboard() {
                   </p>
 
                   <p className="mt-1 text-2xl font-black">
-                    {remainingWeight.toFixed(1).replace(".", ",")} kg
+                    {remainingWeight
+                      .toFixed(1)
+                      .replace(".", ",")}{" "}
+                    kg
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10">
-                    <Bike className="text-cyan-400" size={20} />
+                    <Bike
+                      className="text-cyan-400"
+                      size={20}
+                    />
                   </div>
 
                   <p className="mt-4 text-xs uppercase tracking-wider text-zinc-500">

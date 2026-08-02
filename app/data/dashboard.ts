@@ -1,5 +1,4 @@
-import { Athlete } from "../types/athlete";
-
+import type { Athlete } from "@/types/athlete";
 
 
 export const athlete: Athlete = {
