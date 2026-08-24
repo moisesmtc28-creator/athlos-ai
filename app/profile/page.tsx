@@ -1,5 +1,7 @@
 "use client";
 
+import BackButton from "../components/layout/BackButton";
+
 import {
   FormEvent,
   InputHTMLAttributes,
@@ -186,6 +188,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-6 text-white md:px-8">
       <div className="mx-auto max-w-6xl">
+        <BackButton />
         <header className="mb-8">
           <p className="text-sm font-semibold uppercase tracking-wider text-emerald-400">
             Athlos AI

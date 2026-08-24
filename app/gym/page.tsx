@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Dumbbell, Loader2 } from "lucide-react";
 
 import Sidebar from "../components/layout/Sidebar";
+import BackButton from "../components/layout/BackButton";
 import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 import { useTrainings } from "@/hooks/use-trainings";
 
@@ -20,6 +21,7 @@ export default function GymPage() {
       <Sidebar />
       <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8">
         <div className="mx-auto max-w-5xl">
+      <BackButton />
           <h1 className="text-3xl font-bold">Academia</h1>
           <p className="mt-2 text-zinc-400">
             A IA integra musculação e ciclismo para distribuir melhor a carga da semana.

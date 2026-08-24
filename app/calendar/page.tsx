@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Sidebar from "../components/layout/Sidebar";
+import BackButton from "../components/layout/BackButton";
 import { useTrainings } from "@/hooks/use-trainings";
 
 const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -19,6 +20,7 @@ export default function CalendarPage() {
   return (
     <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0"><Sidebar />
       <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8"><div className="mx-auto max-w-6xl">
+      <BackButton />
         <h1 className="text-3xl font-bold">Calendário</h1><p className="mt-2 capitalize text-zinc-400">{monthLabel}</p>
         {isLoading ? <p className="mt-8 text-zinc-400">Carregando...</p> : isError ? <p className="mt-8 text-red-400">Erro ao carregar treinos.</p> : (
           <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">

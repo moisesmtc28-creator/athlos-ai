@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "../components/layout/Sidebar";
+import BackButton from "../components/layout/BackButton";
 import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 export default function NutritionPage() {
   const { data: profile, isLoading } = useAthleteProfile();
@@ -8,6 +9,7 @@ export default function NutritionPage() {
   const hydration = weight ? Math.round(weight * 35) : null;
   return <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0"><Sidebar />
     <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8"><div className="mx-auto max-w-5xl">
+      <BackButton />
       <h1 className="text-3xl font-bold">Nutrição</h1><p className="mt-2 text-zinc-400">Orientações gerais para apoiar seus treinos. Não substituem acompanhamento profissional.</p>
       {isLoading ? <p className="mt-8">Carregando...</p> : <div className="mt-8 grid gap-5 md:grid-cols-2">
         <Card title="Hidratação diária" value={hydration ? `${(hydration/1000).toFixed(1)} L` : "Informe seu peso"} text="Estimativa geral de 35 ml por kg, ajustando por calor, suor e duração do treino." />

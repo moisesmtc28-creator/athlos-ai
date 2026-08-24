@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "../components/layout/Sidebar";
+import BackButton from "../components/layout/BackButton";
 import { useTrainings } from "@/hooks/use-trainings";
 import { useAthleteProfile } from "@/hooks/use-athlete-profile";
 
@@ -14,6 +15,7 @@ export default function ProgressPage() {
 
   return <main className="flex min-h-screen bg-zinc-950 pb-24 text-white lg:pb-0"><Sidebar />
     <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8"><div className="mx-auto max-w-6xl">
+      <BackButton />
       <h1 className="text-3xl font-bold">Evolução</h1><p className="mt-2 text-zinc-400">Resumo do seu progresso com base nos treinos registrados.</p>
       {isLoading ? <p className="mt-8">Carregando...</p> : <>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

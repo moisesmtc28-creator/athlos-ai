@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import BackButton from "../components/layout/BackButton";
+
 import { useAiCoach } from "@/hooks/use-ai-coach";
 import { useTrainings } from "@/hooks/use-trainings";
 import {
@@ -225,6 +227,7 @@ export default function TrainingPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 pb-28 pt-6 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
+        <BackButton />
         <header className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-cyan-400">

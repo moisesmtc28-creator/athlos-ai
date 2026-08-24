@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState, type ReactNode } from "react";
 
 import Sidebar from "../components/layout/Sidebar";
+import BackButton from "../components/layout/BackButton";
 import { supabase } from "../lib/supabase";
 import { useAiCoach } from "@/hooks/use-ai-coach";
 import { useAthleteProfile } from "@/hooks/use-athlete-profile";
@@ -123,6 +124,7 @@ export default function CoachPage() {
 
       <section className="min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:p-8">
         <div className="mx-auto max-w-5xl">
+      <BackButton />
           <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/70 to-zinc-900 p-6 md:p-10">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-zinc-950">
               <Bot size={30} />
