@@ -30,7 +30,7 @@ async function askGroq(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "openai/gpt-oss-20b",
           messages: [
             {
               role: "user",
