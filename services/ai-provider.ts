@@ -5,85 +5,88 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ========================================
-// GROQ - IA PRINCIPAL
-// ========================================
+type AiResponseMode = "text" | "json";
 
-async function askGroq(prompt: string): Promise<string> {
+async function askGroq(
+  prompt: string,
+  mode: AiResponseMode,
+): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY não encontrada.");
+    throw new Error("GROQ_API_KEY não encontrada no ambiente do servidor.");
   }
 
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-
-        temperature: 0.4,
-        response_format: {
-          type: "json_object",
+  try {
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-
-    throw new Error(
-      `Erro Groq ${response.status}: ${errorText}`,
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.4,
+          ...(mode === "json"
+            ? { response_format: { type: "json_object" } }
+            : {}),
+        }),
+        signal: controller.signal,
+      },
     );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro Groq ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content;
+
+    if (!text) {
+      throw new Error("A Groq retornou uma resposta vazia.");
+    }
+
+    return text;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await response.json();
-
-  const text = data?.choices?.[0]?.message?.content;
-
-  if (!text) {
-    throw new Error("A Groq retornou uma resposta vazia.");
-  }
-
-  return text;
 }
-
-// ========================================
-// GEMINI - IA RESERVA
-// ========================================
 
 function createGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY não encontrada.");
+    throw new Error("GEMINI_API_KEY não encontrada no ambiente do servidor.");
   }
 
   return new GoogleGenAI({ apiKey });
 }
 
-async function askGeminiBackup(prompt: string): Promise<string> {
+async function askGeminiBackup(
+  prompt: string,
+  mode: AiResponseMode,
+): Promise<string> {
   const ai = createGeminiClient();
 
   const response = await ai.models.generateContent({
     model: "gemini-flash-latest",
     contents: prompt,
-
     config: {
-      responseMimeType: "application/json",
+      ...(mode === "json"
+        ? { responseMimeType: "application/json" }
+        : {}),
       temperature: 0.4,
     },
   });
@@ -97,80 +100,56 @@ async function askGeminiBackup(prompt: string): Promise<string> {
   return text;
 }
 
-// ========================================
-// FUNÇÃO PRINCIPAL
-// ========================================
+async function askAI(
+  prompt: string,
+  mode: AiResponseMode,
+): Promise<string> {
+  const errors: string[] = [];
 
-export async function askGemini(prompt: string): Promise<string> {
+  if (process.env.GROQ_API_KEY) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await askGroq(prompt, mode);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Groq ${attempt}/2: ${message}`);
+        console.error(`Erro Groq - tentativa ${attempt}/2:`, error);
 
-  // ----------------------------------------
-  // 1 - TENTA GROQ
-  // ----------------------------------------
-
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      console.log(
-        `Groq - tentativa ${attempt}/2`,
-      );
-
-      const answer = await askGroq(prompt);
-
-      console.log(
-        "Resposta gerada com sucesso pela Groq.",
-      );
-
-      return answer;
-
-    } catch (error) {
-
-      console.error(
-        `Erro Groq - tentativa ${attempt}/2:`,
-        error,
-      );
-
-      if (attempt < 2) {
-        await sleep(1500);
+        if (attempt < 2) await sleep(1200);
       }
     }
+  } else {
+    errors.push("GROQ_API_KEY não configurada.");
   }
 
-  // ----------------------------------------
-  // 2 - FALLBACK PARA GEMINI
-  // ----------------------------------------
+  if (process.env.GEMINI_API_KEY) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await askGeminiBackup(prompt, mode);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Gemini ${attempt}/2: ${message}`);
+        console.error(`Erro Gemini - tentativa ${attempt}/2:`, error);
 
-  console.warn(
-    "Groq indisponível. Tentando Gemini como reserva.",
-  );
-
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-
-      console.log(
-        `Gemini reserva - tentativa ${attempt}/2`,
-      );
-
-      const answer = await askGeminiBackup(prompt);
-
-      console.log(
-        "Resposta gerada com sucesso pelo Gemini.",
-      );
-
-      return answer;
-
-    } catch (error) {
-
-      console.error(
-        `Erro Gemini reserva - tentativa ${attempt}/2:`,
-        error,
-      );
-
-      if (attempt < 2) {
-        await sleep(2000);
+        if (attempt < 2) await sleep(1600);
       }
     }
+  } else {
+    errors.push("GEMINI_API_KEY não configurada.");
   }
 
   throw new Error(
-    "Os serviços de inteligência artificial estão temporariamente indisponíveis.",
+    `Nenhum provedor de IA respondeu. ${errors.join(" | ")}`,
   );
+}
+
+// Mantém o nome usado pelas rotas existentes de geração de plano.
+export async function askGemini(prompt: string): Promise<string> {
+  return askAI(prompt, "json");
+}
+
+// O chat precisa de texto livre. Antes ele também forçava JSON, o que quebrava
+// a conversa em alguns provedores.
+export async function askCoachAI(prompt: string): Promise<string> {
+  return askAI(prompt, "text");
 }

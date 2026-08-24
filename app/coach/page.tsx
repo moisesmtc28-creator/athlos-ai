@@ -48,7 +48,7 @@ export default function CoachPage() {
 
   async function handleGenerate() {
     try {
-      await generatePlan.mutateAsync();
+      await generatePlan.mutateAsync("next");
       router.push("/training");
       router.refresh();
     } catch {

@@ -7,13 +7,17 @@ import {
   CheckCircle2,
   Loader2,
   LockKeyhole,
+  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAiCoach } from "@/hooks/use-ai-coach";
 import { useTrainings } from "@/hooks/use-trainings";
-import { closeTrainingWeek } from "@/services/training.service";
+import {
+  closeTrainingWeek,
+  resetTrainings,
+} from "@/services/training.service";
 import type {
   Training,
   TrainingStatus,
@@ -32,6 +36,7 @@ export default function TrainingPage() {
   } = useTrainings();
 
   const [isClosingWeek, setIsClosingWeek] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
 
@@ -153,6 +158,40 @@ export default function TrainingPage() {
     }
   }
 
+  async function handleResetAndGenerateCurrentWeek() {
+    setActionMessage("");
+    setActionError("");
+
+    const confirmed = window.confirm(
+      "Esta ação vai fechar treinos antigos pendentes, apagar os treinos da semana atual e futuros e criar um novo plano para ESTA semana. O histórico anterior será preservado. Deseja continuar?",
+    );
+
+    if (!confirmed) return;
+
+    setIsResetting(true);
+
+    try {
+      await resetTrainings();
+      await generatePlan.mutateAsync("current");
+
+      await queryClient.invalidateQueries({
+        queryKey: ["trainings"],
+      });
+
+      setActionMessage(
+        "Treinos zerados e novo plano desta semana criado com sucesso.",
+      );
+    } catch (resetError) {
+      setActionError(
+        resetError instanceof Error
+          ? resetError.message
+          : "Não foi possível zerar e recriar esta semana.",
+      );
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
   async function handleGenerateNextWeek() {
     setActionMessage("");
     setActionError("");
@@ -165,7 +204,7 @@ export default function TrainingPage() {
     }
 
     try {
-      await generatePlan.mutateAsync();
+      await generatePlan.mutateAsync("next");
 
       await queryClient.invalidateQueries({
         queryKey: ["trainings"],
@@ -244,7 +283,21 @@ export default function TrainingPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={() => void handleResetAndGenerateCurrentWeek()}
+                disabled={isResetting || generatePlan.isPending}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isResetting ? (
+                  <Loader2 size={19} className="animate-spin" />
+                ) : (
+                  <RotateCcw size={19} />
+                )}
+                {isResetting ? "Recriando..." : "Zerar e criar esta semana"}
+              </button>
+
               {weekIsClosed ? (
                 <div className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 font-semibold text-emerald-300">
                   <CheckCircle2 size={19} />

@@ -68,6 +68,7 @@ type GeminiSession = {
   date: string;
   duration: number;
   zone: string;
+  type?: "bike" | "strength";
 };
 
 type GeminiPlan = {
@@ -84,22 +85,37 @@ function formatBrazilianDate(date: string): string {
   return `${day}/${month}/${year}`;
 }
 
-function getNextWeekDates(): string[] {
-  const today = new Date();
-  const currentDay = today.getDay();
+function getBrazilToday(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
 
-  const daysUntilNextMonday =
-    currentDay === 0 ? 1 : 8 - currentDay;
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
 
-  const nextMonday = new Date(today);
-  nextMonday.setHours(12, 0, 0, 0);
-  nextMonday.setDate(today.getDate() + daysUntilNextMonday);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function getWeekDates(targetWeek: "current" | "next"): string[] {
+  const today = getBrazilToday();
+  const currentDay = today.getUTCDay();
+  const daysSinceMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() - daysSinceMonday);
+
+  if (targetWeek === "next") {
+    monday.setUTCDate(monday.getUTCDate() + 7);
+  }
 
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(nextMonday);
-    date.setDate(nextMonday.getDate() + index);
-
-    return formatDate(date);
+    const date = new Date(monday);
+    date.setUTCDate(monday.getUTCDate() + index);
+    return date.toISOString().split("T")[0];
   });
 }
 
@@ -196,6 +212,11 @@ export async function POST(request: NextRequest) {
   let createdPlanId: string | null = null;
 
   try {
+    const body = (await request.json().catch(() => ({}))) as {
+      targetWeek?: "current" | "next";
+    };
+    const targetWeek = body.targetWeek === "current" ? "current" : "next";
+
     const accessToken = getBearerToken(request);
 
     if (!accessToken) {
@@ -297,11 +318,11 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * 2. Definir a próxima semana
+     * 2. Definir a semana solicitada
      */
-    const nextWeekDates = getNextWeekDates();
-    const startDate = nextWeekDates[0];
-    const endDate = nextWeekDates[6];
+    const plannedWeekDates = getWeekDates(targetWeek);
+    const startDate = plannedWeekDates[0];
+    const endDate = plannedWeekDates[6];
 
     /*
      * 3. Verificar se já existe plano para a semana
@@ -431,6 +452,16 @@ export async function POST(request: NextRequest) {
           )
         : requestedTrainingFrequency;
 
+    const requestedStrengthDays = profile.does_strength_training
+      ? Math.min(
+          Math.max(
+            profile.strength_days_per_week ?? profile.gym_days?.length ?? 0,
+            0,
+          ),
+          4,
+        )
+      : 0;
+
     const athleteAge = calculateAge(profile.birth_date);
 
     const historyText =
@@ -478,7 +509,7 @@ Ganho de elevação: ${
     const prompt = `
 Você é o treinador virtual do Athlos AI, especializado em ciclismo, progressão segura e planejamento individualizado.
 
-Crie um plano de ciclismo para a próxima semana usando somente os dados fornecidos.
+Crie um plano integrado de ciclismo e musculação para a semana solicitada usando somente os dados fornecidos.
 
 O plano deve continuar o treinamento anterior. Não crie uma semana aleatória.
 
@@ -522,7 +553,8 @@ Tempo disponível por dia: ${normalizeMinutesByDay(
 Carga semanal disponível: ${
       profile.weekly_hours ?? "não informada"
     } horas
-Quantidade de treinos solicitada: ${weeklyBikeDays}
+Quantidade de treinos de ciclismo solicitada: ${weeklyBikeDays}
+Quantidade de treinos de musculação solicitada: ${requestedStrengthDays}
 Horário preferido: ${
       profile.preferred_training_time ?? "não informado"
     }
@@ -579,11 +611,15 @@ SEMANA A SER PLANEJADA
 
 As únicas datas permitidas são:
 
-${nextWeekDates.join(", ")}
+${plannedWeekDates.join(", ")}
 
 REGRAS OBRIGATÓRIAS
 
-- Crie exatamente ${weeklyBikeDays} treinos.
+- Crie exatamente ${weeklyBikeDays} treinos de ciclismo e exatamente ${requestedStrengthDays} treinos de musculação.
+- Cada sessão deve informar "type": "bike" ou "strength".
+- Para musculação, use os dias de academia quando informados e detalhe exercícios, séries, repetições, descanso e orientação de carga.
+- Para musculação use zone "Z1" apenas como valor técnico do sistema; a intensidade real deve estar descrita no texto.
+- Pode haver ciclismo e musculação no mesmo dia se isso respeitar a recuperação e a disponibilidade.
 - Use somente as datas permitidas.
 - Respeite os dias disponíveis do atleta.
 - Respeite o tempo disponível em cada dia.
@@ -609,7 +645,8 @@ FORMATO OBRIGATÓRIO
       "description": "instruções completas e objetivas",
       "date": "AAAA-MM-DD",
       "duration": 60,
-      "zone": "Z2"
+      "zone": "Z2",
+      "type": "bike"
     }
   ]
 }
@@ -647,36 +684,52 @@ FORMATO OBRIGATÓRIO
       );
     }
 
-    if (plan.sessions.length !== weeklyBikeDays) {
+    const expectedTotalSessions = weeklyBikeDays + requestedStrengthDays;
+
+    if (plan.sessions.length !== expectedTotalSessions) {
       throw new Error(
-        `A IA retornou ${plan.sessions.length} treinos, mas deveria retornar ${weeklyBikeDays}.`,
+        `A IA retornou ${plan.sessions.length} treinos, mas deveria retornar ${expectedTotalSessions} (${weeklyBikeDays} de ciclismo e ${requestedStrengthDays} de musculação).`,
+      );
+    }
+
+    const bikeSessions = plan.sessions.filter((session) => session.type !== "strength");
+    const strengthSessions = plan.sessions.filter((session) => session.type === "strength");
+
+    if (bikeSessions.length !== weeklyBikeDays || strengthSessions.length !== requestedStrengthDays) {
+      throw new Error(
+        `A IA não respeitou a divisão do plano: esperado ${weeklyBikeDays} ciclismo e ${requestedStrengthDays} musculação.`,
       );
     }
 
     /*
      * 7. Validar os treinos
      */
-    const usedDates = new Set<string>();
+    const usedDatesByType = {
+      bike: new Set<string>(),
+      strength: new Set<string>(),
+    };
 
     const trainings: Training[] = plan.sessions.map(
       (session, index) => {
+        const sessionType = session.type === "strength" ? "strength" : "bike";
+        const usedDates = usedDatesByType[sessionType];
         const availableFallbackDate =
-          nextWeekDates.find((date) => !usedDates.has(date)) ??
-          nextWeekDates[
-            Math.min(index, nextWeekDates.length - 1)
-          ];
+          plannedWeekDates.find((date) => !usedDates.has(date)) ??
+          plannedWeekDates[Math.min(index, plannedWeekDates.length - 1)];
 
         const validDate =
-          nextWeekDates.includes(session.date) &&
-          !usedDates.has(session.date)
+          plannedWeekDates.includes(session.date) && !usedDates.has(session.date)
             ? session.date
             : availableFallbackDate;
 
         usedDates.add(validDate);
 
-        const validZone = isValidZone(session.zone)
-          ? session.zone
-          : "Z2";
+        const validZone =
+          sessionType === "strength"
+            ? "Z1"
+            : isValidZone(session.zone)
+              ? session.zone
+              : "Z2";
 
         const suppliedDuration = Number(session.duration);
 
@@ -689,7 +742,9 @@ FORMATO OBRIGATÓRIO
         return {
           id: crypto.randomUUID(),
           title:
-            session.title?.trim() || `Treino ${index + 1}`,
+            sessionType === "strength"
+              ? `Musculação — ${session.title?.trim() || `Treino ${index + 1}`}`
+              : session.title?.trim() || `Treino ${index + 1}`,
           description:
             session.description?.trim() ||
             "Treino gerado pelo treinador Athlos AI.",

@@ -12,7 +12,9 @@ type GeneratePlanResponse = {
   };
 };
 
-export async function generateWeeklyPlan(): Promise<GeneratePlanResponse> {
+export async function generateWeeklyPlan(
+  targetWeek: "current" | "next" = "next",
+): Promise<GeneratePlanResponse> {
   const {
     data: { session },
     error: sessionError,
@@ -36,6 +38,7 @@ export async function generateWeeklyPlan(): Promise<GeneratePlanResponse> {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
+    body: JSON.stringify({ targetWeek }),
   });
 
   const data = await response.json().catch(() => null);

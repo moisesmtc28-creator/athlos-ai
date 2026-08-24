@@ -140,3 +140,31 @@ export async function closeTrainingWeek(
     updatedCount: pendingIds.length,
   };
 }
+
+
+export async function resetTrainings(): Promise<void> {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session?.access_token) {
+    throw new Error("Sua sessão expirou. Entre novamente.");
+  }
+
+  const response = await fetch("/api/training/reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      data?.details ?? data?.error ?? "Não foi possível zerar os treinos.",
+    );
+  }
+}
