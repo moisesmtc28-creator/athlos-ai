@@ -45,7 +45,7 @@ export async function askGemini(prompt: string): Promise<string> {
   // Modelo principal + modelo reserva
   const models = [
     "gemini-flash-latest",
-    "gemini-2.5-flash",
+    "gemini-3.6-flash",
   ];
 
   for (const model of models) {
