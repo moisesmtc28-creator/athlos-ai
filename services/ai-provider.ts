@@ -1,104 +1,176 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ========================================
+// GROQ - IA PRINCIPAL
+// ========================================
+
+async function askGroq(prompt: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY não encontrada.");
+  }
+
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+
+        temperature: 0.4,
+        response_format: {
+          type: "json_object",
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Erro Groq ${response.status}: ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+
+  const text = data?.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error("A Groq retornou uma resposta vazia.");
+  }
+
+  return text;
+}
+
+// ========================================
+// GEMINI - IA RESERVA
+// ========================================
+
 function createGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error(
-      "GEMINI_API_KEY não encontrada. Configure a variável no ambiente do servidor.",
-    );
+    throw new Error("GEMINI_API_KEY não encontrada.");
   }
 
   return new GoogleGenAI({ apiKey });
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRetryableError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-
-  const candidate = error as {
-    status?: number;
-    message?: string;
-  };
-
-  return (
-    candidate.status === 429 ||
-    candidate.status === 500 ||
-    candidate.status === 502 ||
-    candidate.status === 503 ||
-    candidate.status === 504 ||
-    candidate.message?.includes('"code":429') === true ||
-    candidate.message?.includes('"code":500') === true ||
-    candidate.message?.includes('"code":502') === true ||
-    candidate.message?.includes('"code":503') === true ||
-    candidate.message?.includes('"code":504') === true
-  );
-}
-
-export async function askGemini(prompt: string): Promise<string> {
+async function askGeminiBackup(prompt: string): Promise<string> {
   const ai = createGeminiClient();
 
-  // Modelo principal + modelo reserva
-  const models = [
-    "gemini-flash-latest",
-    "gemini-3.6-flash",
-  ];
+  const response = await ai.models.generateContent({
+    model: "gemini-flash-latest",
+    contents: prompt,
 
-  for (const model of models) {
-    const maxAttempts = 2;
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0.4,
+    },
+  });
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(
-          `Gemini: usando ${model} - tentativa ${attempt}/${maxAttempts}`,
-        );
+  const text = response.text;
 
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.4,
-          },
-        });
+  if (!text) {
+    throw new Error("O Gemini retornou uma resposta vazia.");
+  }
 
-        const text = response.text;
+  return text;
+}
 
-        if (!text) {
-          throw new Error("O Gemini retornou uma resposta vazia.");
-        }
+// ========================================
+// FUNÇÃO PRINCIPAL
+// ========================================
 
-        console.log(`Gemini respondeu com sucesso usando ${model}.`);
+export async function askGemini(prompt: string): Promise<string> {
 
-        return text;
-      } catch (error) {
-        console.error(
-          `Erro Gemini no modelo ${model} - tentativa ${attempt}/${maxAttempts}:`,
-          error,
-        );
+  // ----------------------------------------
+  // 1 - TENTA GROQ
+  // ----------------------------------------
 
-        // Erros que não são temporários não devem ser repetidos.
-        if (!isRetryableError(error)) {
-          throw error;
-        }
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      console.log(
+        `Groq - tentativa ${attempt}/2`,
+      );
 
-        // Aguarda antes da segunda tentativa.
-        if (attempt < maxAttempts) {
-          await sleep(2000 * attempt);
-        }
+      const answer = await askGroq(prompt);
+
+      console.log(
+        "Resposta gerada com sucesso pela Groq.",
+      );
+
+      return answer;
+
+    } catch (error) {
+
+      console.error(
+        `Erro Groq - tentativa ${attempt}/2:`,
+        error,
+      );
+
+      if (attempt < 2) {
+        await sleep(1500);
       }
     }
+  }
 
-    console.warn(
-      `Modelo ${model} indisponível. Tentando modelo reserva...`,
-    );
+  // ----------------------------------------
+  // 2 - FALLBACK PARA GEMINI
+  // ----------------------------------------
+
+  console.warn(
+    "Groq indisponível. Tentando Gemini como reserva.",
+  );
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+
+      console.log(
+        `Gemini reserva - tentativa ${attempt}/2`,
+      );
+
+      const answer = await askGeminiBackup(prompt);
+
+      console.log(
+        "Resposta gerada com sucesso pelo Gemini.",
+      );
+
+      return answer;
+
+    } catch (error) {
+
+      console.error(
+        `Erro Gemini reserva - tentativa ${attempt}/2:`,
+        error,
+      );
+
+      if (attempt < 2) {
+        await sleep(2000);
+      }
+    }
   }
 
   throw new Error(
-    "Os modelos do Gemini estão temporariamente indisponíveis. Tente novamente em alguns minutos.",
+    "Os serviços de inteligência artificial estão temporariamente indisponíveis.",
   );
 }
