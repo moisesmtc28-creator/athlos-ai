@@ -515,12 +515,15 @@ export async function POST(request: NextRequest) {
           )
         : requestedTrainingFrequency;
 
+    const configuredStrengthDays = Math.max(
+      profile.strength_days_per_week ?? profile.gym_days?.length ?? 0,
+      0,
+    );
+    const gymAvailabilityCount = new Set(profile.gym_days ?? []).size;
     const requestedStrengthDays = profile.does_strength_training
       ? Math.min(
-          Math.max(
-            profile.strength_days_per_week ?? profile.gym_days?.length ?? 0,
-            0,
-          ),
+          configuredStrengthDays,
+          gymAvailabilityCount > 0 ? gymAvailabilityCount : configuredStrengthDays,
           4,
         )
       : 0;
@@ -693,7 +696,11 @@ REGRAS OBRIGATÓRIAS
 
 - Crie exatamente ${weeklyBikeDays} treinos de ciclismo e exatamente ${requestedStrengthDays} treinos de musculação.
 - Cada sessão deve informar "type": "bike" ou "strength".
-- Para musculação, use os dias de academia quando informados e detalhe exercícios, séries, repetições, descanso e orientação de carga.
+- Para musculação, use EXCLUSIVAMENTE os dias de academia quando informados e detalhe exercícios, séries, repetições, descanso e orientação de carga.
+- Nunca crie duas fichas de musculação para o mesmo dia.
+- As fichas de musculação precisam ter funções diferentes na semana. Não repita "pernas e core" em todas.
+- Se houver 3 ou 4 sessões de musculação, limite a no máximo 2 sessões com carga relevante de membros inferiores; use as demais para membros superiores, estabilidade escapular, core e prevenção de lesões do ciclista.
+- Não coloque duas sessões pesadas de membros inferiores em dias consecutivos.
 - Toda sessão de musculação DEVE incluir o campo "focus" e um array "exercises" com 5 a 8 exercícios estruturados.
 - Cada exercício deve ter name, muscleGroup, sets, reps, loadKg (use null quando não houver histórico de carga), restSeconds e instructions.
 - Preserve exercícios principais entre semanas quando houver histórico, promovendo progressão gradual em vez de trocar a ficha inteira.

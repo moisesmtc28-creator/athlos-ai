@@ -78,7 +78,9 @@ function allowedDates(session: PlannerSession, weekDates: string[], profile: Pla
   const strengthDays = profile.gymDays?.length ? new Set(profile.gymDays) : bikeDays;
   const allowedDays = session.type === "strength" ? strengthDays : bikeDays;
   const filtered = allowedDays ? weekDates.filter((date) => allowedDays.has(dayKey(date))) : weekDates;
-  return filtered.length ? filtered : weekDates;
+  // Se o atleta informou dias específicos, nunca extrapole essa disponibilidade.
+  // O fallback para qualquer dia da semana fazia o motor ignorar o perfil.
+  return filtered;
 }
 
 function minuteCapacity(date: string, profile: PlannerProfile): number | null {
@@ -105,6 +107,7 @@ function pairPenalty(a: PlannerSession, aDate: string, b: PlannerSession, bDate:
   }
 
   if (distance === 1) {
+    if (isStrengthLower(a) && isStrengthLower(b)) score += 2200;
     if (isHardBike(a) && isHardBike(b)) score += 800;
     if ((isLongRide(a) && isHardBike(b)) || (isLongRide(b) && isHardBike(a))) score += 1800;
     if ((isStrengthLower(a) && isHardBike(b)) || (isStrengthLower(b) && isHardBike(a))) score += 5000;
@@ -133,9 +136,28 @@ function placementPenalty<T extends PlannerSession>(
     score += 1500 + (session.duration - capacity) * 8;
   }
 
-  const sessionsSameDay = placed.filter((item) => item.date === date).length;
-  if (sessionsSameDay >= 2) score += 1200;
-  else if (sessionsSameDay === 1) score += 100;
+  const sameDaySessions = placed.filter((item) => item.date === date);
+  const sessionsSameDay = sameDaySessions.length;
+  if (sessionsSameDay >= 2) score += 5000;
+  else if (sessionsSameDay === 1) score += 250;
+
+  // A capacidade é do DIA, não de cada sessão isoladamente.
+  // Assim 2 sessões de 55 min não cabem em uma janela de 60 min.
+  if (capacity !== null) {
+    const usedMinutes = sameDaySessions.reduce((sum, item) => sum + item.duration, 0);
+    const overflow = usedMinutes + session.duration - capacity;
+    if (overflow > 0) score += 20000 + overflow * 50;
+  }
+
+  // Nunca é uma boa solução empilhar duas fichas de musculação no mesmo dia.
+  if (session.type === "strength" && sameDaySessions.some((item) => item.type === "strength")) {
+    score += 100000;
+  }
+
+  // Da mesma forma, dois pedais no mesmo dia só devem ocorrer como último recurso.
+  if (session.type === "bike" && sameDaySessions.some((item) => item.type === "bike")) {
+    score += 30000;
+  }
 
   if (session.preferredDate && session.preferredDate !== date) score += 8;
 
@@ -190,8 +212,15 @@ export function scheduleTrainingWeek<T extends PlannerSession>(
   for (const { session, index } of ordered) {
     const forceKey = session.id ?? String(index);
     const forced = forcedDates[forceKey];
-    const candidates = forced && weekDates.includes(forced) ? [forced] : allowedDates(session, weekDates, profile);
-    let bestDate = candidates[0] ?? weekDates[0];
+    const allowed = allowedDates(session, weekDates, profile);
+    const candidates = forced && weekDates.includes(forced) ? [forced] : allowed;
+    // Perfil inconsistente (ex.: pede 4 academias mas liberou só 2 dias) não deve
+    // fazer o motor inventar disponibilidade. Mantemos a data preferida, se válida,
+    // apenas para que a API consiga explicar o conflito ao usuário.
+    const fallbackDate = session.preferredDate && weekDates.includes(session.preferredDate)
+      ? session.preferredDate
+      : weekDates[0];
+    let bestDate = candidates[0] ?? fallbackDate;
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (const date of candidates) {
@@ -213,6 +242,7 @@ export function scheduleTrainingWeek<T extends PlannerSession>(
       const forceKey = current.id ?? String(current.__index ?? index);
       if (forcedDates[forceKey]) continue;
       const candidates = allowedDates(current, weekDates, profile);
+      if (!candidates.length) continue;
       const basePenalty = totalPenalty(placed, profile, weekDates);
       let bestDate = current.date;
       let bestPenalty = basePenalty;
