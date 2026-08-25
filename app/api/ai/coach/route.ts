@@ -107,6 +107,46 @@ export async function POST(request: NextRequest) {
       throw new Error(`Erro ao carregar histórico: ${sessionsError.message}`);
     }
 
+    const { data: checkins } = await supabase
+      .from("daily_checkins")
+      .select("checkin_date,readiness_score,sleep_hours,fatigue,muscle_soreness,motivation")
+      .eq("profile_id", profile.id)
+      .order("checkin_date", { ascending: false })
+      .limit(7);
+
+    const { data: strengthRows } = await supabase
+      .from("strength_workouts")
+      .select(`
+        workout_label,focus,status,
+        training_sessions!inner(scheduled_date),
+        strength_exercises(exercise_name,strength_sets(performed_load_kg,performed_reps,rpe,completed))
+      `)
+      .eq("profile_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    const { data: memories } = await supabase
+      .from("athlete_memory")
+      .select("memory_key,memory_value,confidence,last_observed_at")
+      .eq("profile_id", profile.id)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    const completedCount = (sessions ?? []).filter((item: any) => item.status === "completed").length;
+    const decidedCount = (sessions ?? []).filter((item: any) => ["completed","missed","cancelled"].includes(item.status)).length;
+    const adherence = decidedCount ? Math.round((completedCount / decidedCount) * 100) : null;
+    if (adherence !== null) {
+      await supabase.from("athlete_memory").upsert({
+        profile_id: profile.id,
+        memory_key: "recent_adherence",
+        memory_value: `Aderência recente aproximada: ${adherence}% nos treinos com status finalizado.`,
+        confidence: 0.9,
+        source: "system",
+        last_observed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "profile_id,memory_key" });
+    }
+
     const history = safeHistory(body.history)
       .map((item) => `${item.role === "user" ? "ATLETA" : "TREINADOR"}: ${item.content}`)
       .join("\n");
@@ -160,8 +200,17 @@ Limitações: ${profile.physical_limitations ?? "nenhuma informada"}
 Evento-alvo: ${profile.target_event_name ?? "nenhum"}
 Data do evento: ${profile.target_event_date ?? "não informada"}
 
-HISTÓRICO RECENTE
+HISTÓRICO RECENTE DE CICLISMO/SESSÕES
 ${recentSessions || "Nenhum treino registrado."}
+
+CHECK-INS RECENTES
+${JSON.stringify(checkins ?? [])}
+
+HISTÓRICO ESTRUTURADO DE MUSCULAÇÃO
+${JSON.stringify(strengthRows ?? [])}
+
+MEMÓRIA ESPORTIVA CONSOLIDADA
+${(memories ?? []).map((m: any) => `${m.memory_key}: ${m.memory_value}`).join("\n") || "Sem memórias consolidadas ainda."}
 
 CONVERSA RECENTE
 ${history || "Sem conversa anterior."}

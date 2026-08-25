@@ -20,6 +20,7 @@ import TrainingCard from "./components/cards/TrainingCard";
 import StatCard from "./components/cards/StatCard";
 import CoachCard from "./components/cards/CoachCard";
 import WeightChart from "./components/charts/WeightChart";
+import DailyCheckinCard from "./components/dashboard/DailyCheckinCard";
 
 import { useAthlete } from "../hooks/use-athlete";
 import { supabase } from "./lib/supabase";
@@ -289,6 +290,10 @@ function AuthenticatedDashboard() {
 
           <section className="mt-6">
             <TrainingCard />
+          </section>
+
+          <section className="mt-6">
+            <DailyCheckinCard />
           </section>
 
           <section className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">

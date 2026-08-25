@@ -9,6 +9,9 @@ type TrainingSessionRow = {
   duration_minutes: number;
   zone: Training["zone"];
   status: Training["status"];
+  session_type?: Training["type"];
+  original_scheduled_date?: string | null;
+  reschedule_reason?: string | null;
 };
 
 type CloseTrainingWeekResult = {
@@ -60,7 +63,10 @@ export async function getTrainings(): Promise<Training[]> {
         scheduled_date,
         duration_minutes,
         zone,
-        status
+        status,
+        session_type,
+        original_scheduled_date,
+        reschedule_reason
       `,
     )
     .eq("profile_id", profileId)
@@ -81,6 +87,9 @@ export async function getTrainings(): Promise<Training[]> {
       duration: session.duration_minutes,
       zone: session.zone,
       status: session.status,
+      type: session.session_type ?? (session.title.startsWith("Musculação") ? "strength" : "bike"),
+      originalDate: session.original_scheduled_date ?? null,
+      rescheduleReason: session.reschedule_reason ?? null,
     }),
   );
 }
