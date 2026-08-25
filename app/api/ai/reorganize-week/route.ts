@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { askGemini } from "@/services/ai-provider";
 import { scheduleTrainingWeek, summarizeScheduleConflicts } from "@/services/planning-engine";
 
 function tokenFrom(request: NextRequest) {
@@ -32,7 +33,6 @@ export async function POST(request: NextRequest) {
   try {
     const token = tokenFrom(request);
     if (!token) return NextResponse.json({ error: "Usuário não autenticado." }, { status: 401 });
-
     const body = (await request.json()) as { startDate?: string; endDate?: string; note?: string; forcedMoves?: Array<{ id: string; date: string }> };
     if (!body.startDate || !body.endDate) return NextResponse.json({ error: "Período inválido." }, { status: 400 });
 

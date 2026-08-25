@@ -1,15 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
 
-function weekBounds(dateValue: string) {
-  const date = new Date(`${dateValue}T12:00:00Z`);
-  const day = date.getUTCDay();
-  date.setUTCDate(date.getUTCDate() - (day === 0 ? 6 : day - 1));
-  const start = date.toISOString().slice(0, 10);
-  const endDate = new Date(date);
-  endDate.setUTCDate(endDate.getUTCDate() + 6);
-  return { start, end: endDate.toISOString().slice(0, 10) };
-}
-
 export async function moveTraining(trainingId: string, newDate: string, reason = "Movido pelo atleta no calendário") {
   const { data: current, error: readError } = await supabase
     .from("training_sessions")
@@ -25,7 +15,6 @@ export async function moveTraining(trainingId: string, newDate: string, reason =
     updated_at: new Date().toISOString(),
   }).eq("id", trainingId);
   if (error) throw new Error(error.message);
-
   // O treino movido vira uma preferência fixa; o motor reorganiza os demais ao redor dele.
   const bounds = weekBounds(newDate);
   try {
