@@ -141,9 +141,16 @@ async function askCloudflare(
     }
 
     const data = await response.json();
-    const text = data?.result?.response;
-    if (!text) throw new Error("Cloudflare Workers AI retornou resposta vazia.");
-    return text;
+    const output = data?.result?.response;
+
+    if (output === undefined || output === null || output === "") {
+      throw new Error("Cloudflare Workers AI retornou resposta vazia.");
+    }
+
+    // O Workers AI pode devolver JSON já convertido em objeto quando
+    // response_format=json_object é usado. As rotas antigas esperam texto
+    // e chamam .replace(), então normalizamos sempre para string aqui.
+    return typeof output === "string" ? output : JSON.stringify(output);
   } finally {
     clearTimeout(timeout);
   }
