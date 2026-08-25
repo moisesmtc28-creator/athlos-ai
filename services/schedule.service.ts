@@ -1,5 +1,20 @@
 import { supabase } from "@/app/lib/supabase";
 
+function addIsoDays(value: string, amount: number): string {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function weekBounds(value: string): { start: string; end: string; dates: string[] } {
+  const date = new Date(`${value}T12:00:00Z`);
+  const day = date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() - (day === 0 ? 6 : day - 1));
+  const start = date.toISOString().slice(0, 10);
+  const dates = Array.from({ length: 7 }, (_, index) => addIsoDays(start, index));
+  return { start, end: dates[6], dates };
+}
+
 export async function moveTraining(trainingId: string, newDate: string, reason = "Movido pelo atleta no calendário") {
   const { data: current, error: readError } = await supabase
     .from("training_sessions")
