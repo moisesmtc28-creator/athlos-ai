@@ -791,32 +791,8 @@ FORMATO OBRIGATÓRIO
       ) {
         return "strength";
       }
-return "bike";
-    };
 
-    // Modelos gratuitos podem devolver sessões extras. O Athlos, e não a IA,
-    // controla a quantidade final do plano. Normalizamos o tipo, separamos as
-    // modalidades e mantemos exatamente a quantidade configurada no perfil.
-    const normalizedSessions = plan.sessions.map((session) => ({
-      ...session,
-      type: normalizeSessionType(session),
-    }));
-
-    const bikeSessions = normalizedSessions
-      .filter((session) => session.type === "bike")
-      .slice(0, weeklyBikeDays);
-    const strengthSessions = normalizedSessions
-      .filter((session) => session.type === "strength")
-      .slice(0, requestedStrengthDays);
-
-    if (bikeSessions.length < weeklyBikeDays || strengthSessions.length < requestedStrengthDays) {
-      throw new Error(
-        `A IA não retornou treinos suficientes. Recebidos: ${bikeSessions.length}/${weeklyBikeDays} de ciclismo e ${strengthSessions.length}/${requestedStrengthDays} de musculação. Tente gerar novamente.`,
-      );
-    }
-
-    // Daqui em diante trabalhamos somente com a quantidade correta.
-    plan.sessions = [...bikeSessions, ...strengthSessions];
+      return "bike";
     };
 
     // Modelos gratuitos podem devolver sessões extras. O Athlos, e não a IA,
@@ -878,33 +854,6 @@ return "bike";
       };
     });
 
-        const suppliedDuration = Number(session.duration);
-
-        const validDuration =
-          Number.isFinite(suppliedDuration) &&
-          suppliedDuration > 0
-            ? Math.round(suppliedDuration)
-            : 60;
-
-        return {
-          id: crypto.randomUUID(),
-          title:
-            sessionType === "strength"
-              ? `Musculação — ${(session.title?.trim() || `Treino ${index + 1}`)
-                  .replace(/^muscula(?:ção|cao)\s*(?:—|-|:)\s*/i, "")
-                  .trim()}`
-              : session.title?.trim() || `Treino ${index + 1}`,
-          description:
-            session.description?.trim() ||
-            "Treino gerado pelo treinador Athlos AI.",
-          date: validDate,
-          duration: validDuration,
-          zone: validZone,
-          status: "planned",
-          type: sessionType,
-        };
-      });
-
     const scheduledSessions = scheduleTrainingWeek(
       contentSessions,
       plannedWeekDates,
@@ -912,8 +861,6 @@ return "bike";
         availableDays: profile.available_days,
         gymDays: profile.gym_days,
         availableMinutesByDay: profile.available_minutes_by_day,
-      },
-    );
       },
     );
 
