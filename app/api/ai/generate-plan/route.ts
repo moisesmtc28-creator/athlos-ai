@@ -774,22 +774,45 @@ FORMATO OBRIGATÓRIO
       );
     }
 
-    const expectedTotalSessions = weeklyBikeDays + requestedStrengthDays;
+    const normalizeSessionType = (session: GeminiSession): "bike" | "strength" => {
+      const title = String(session.title ?? "").toLowerCase();
+      const focus = String(session.focus ?? "").toLowerCase();
+      const hasExercises = Array.isArray(session.exercises) && session.exercises.length > 0;
 
-    if (plan.sessions.length !== expectedTotalSessions) {
+      if (
+        session.type === "strength" ||
+        hasExercises ||
+        /muscula|força|forca|academia|agachamento|supino|remada/.test(`${title} ${focus}`)
+      ) {
+        return "strength";
+      }
+
+      return "bike";
+    };
+
+    // Modelos gratuitos podem devolver sessões extras. O Athlos, e não a IA,
+    // controla a quantidade final do plano. Normalizamos o tipo, separamos as
+    // modalidades e mantemos exatamente a quantidade configurada no perfil.
+    const normalizedSessions = plan.sessions.map((session) => ({
+      ...session,
+      type: normalizeSessionType(session),
+    }));
+
+    const bikeSessions = normalizedSessions
+      .filter((session) => session.type === "bike")
+      .slice(0, weeklyBikeDays);
+    const strengthSessions = normalizedSessions
+      .filter((session) => session.type === "strength")
+      .slice(0, requestedStrengthDays);
+
+    if (bikeSessions.length < weeklyBikeDays || strengthSessions.length < requestedStrengthDays) {
       throw new Error(
-        `A IA retornou ${plan.sessions.length} treinos, mas deveria retornar ${expectedTotalSessions} (${weeklyBikeDays} de ciclismo e ${requestedStrengthDays} de musculação).`,
+        `A IA não retornou treinos suficientes. Recebidos: ${bikeSessions.length}/${weeklyBikeDays} de ciclismo e ${strengthSessions.length}/${requestedStrengthDays} de musculação. Tente gerar novamente.`,
       );
     }
 
-    const bikeSessions = plan.sessions.filter((session) => session.type !== "strength");
-    const strengthSessions = plan.sessions.filter((session) => session.type === "strength");
-
-    if (bikeSessions.length !== weeklyBikeDays || strengthSessions.length !== requestedStrengthDays) {
-      throw new Error(
-        `A IA não respeitou a divisão do plano: esperado ${weeklyBikeDays} ciclismo e ${requestedStrengthDays} musculação.`,
-      );
-    }
+    // Daqui em diante trabalhamos somente com a quantidade correta.
+    plan.sessions = [...bikeSessions, ...strengthSessions];
 
     /*
      * 7. Validar os treinos
@@ -833,7 +856,9 @@ FORMATO OBRIGATÓRIO
           id: crypto.randomUUID(),
           title:
             sessionType === "strength"
-              ? `Musculação — ${session.title?.trim() || `Treino ${index + 1}`}`
+              ? `Musculação — ${(session.title?.trim() || `Treino ${index + 1}`)
+                  .replace(/^muscula(?:ção|cao)\s*(?:—|-|:)\s*/i, "")
+                  .trim()}`
               : session.title?.trim() || `Treino ${index + 1}`,
           description:
             session.description?.trim() ||
