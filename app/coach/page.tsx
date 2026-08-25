@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useMemo, useState, type ReactNode } from "react";
 
 import Sidebar from "../components/layout/Sidebar";
@@ -25,6 +26,7 @@ type ChatMessage = {
 
 export default function CoachPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const profileQuery = useAthleteProfile();
   const generatePlan = useAiCoach();
 
@@ -91,7 +93,7 @@ export default function CoachPage() {
       });
 
       const data = (await response.json().catch(() => null)) as
-        | { answer?: string; error?: string; details?: string }
+        | { answer?: string; error?: string; details?: string; calendarChanges?: Array<{ id: string; from: string; to: string }> }
         | null;
 
       if (!response.ok) {
@@ -107,6 +109,10 @@ export default function CoachPage() {
           content: data?.answer ?? "Não recebi uma resposta válida.",
         },
       ]);
+      if (data?.calendarChanges?.length) {
+        await queryClient.invalidateQueries({ queryKey: ["trainings"] });
+        await queryClient.invalidateQueries({ queryKey: ["strength-workouts"] });
+      }
     } catch (error) {
       setChatError(
         error instanceof Error

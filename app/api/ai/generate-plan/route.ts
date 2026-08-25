@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { askGemini } from "@/services/ai-provider";
+import { scheduleTrainingWeek } from "@/services/planning-engine";
 import type { Training } from "@/types/training";
 
 type AthleteProfile = {
@@ -60,6 +61,20 @@ type PreviousSession = {
   average_speed: number | null;
   cadence: number | null;
   elevation_gain: number | null;
+  original_scheduled_date?: string | null;
+  reschedule_reason?: string | null;
+  missed_reason?: string | null;
+  session_type?: string | null;
+};
+
+type GeminiExercise = {
+  name: string;
+  muscleGroup?: string;
+  sets?: number;
+  reps?: string;
+  loadKg?: number | null;
+  restSeconds?: number;
+  instructions?: string;
 };
 
 type GeminiSession = {
@@ -69,6 +84,8 @@ type GeminiSession = {
   duration: number;
   zone: string;
   type?: "bike" | "strength";
+  focus?: string;
+  exercises?: GeminiExercise[];
 };
 
 type GeminiPlan = {
@@ -421,7 +438,11 @@ export async function POST(request: NextRequest) {
           distance_km,
           average_speed,
           cadence,
-          elevation_gain
+          elevation_gain,
+          original_scheduled_date,
+          reschedule_reason,
+          missed_reason,
+          session_type
         `)
         .eq("profile_id", profile.id)
         .order("scheduled_date", { ascending: false })
@@ -435,6 +456,46 @@ export async function POST(request: NextRequest) {
 
     const previousSessions =
       (historyData ?? []) as PreviousSession[];
+
+    const { data: strengthHistory } = await supabase
+      .from("strength_workouts")
+      .select(`
+        workout_label,focus,status,
+        training_sessions!inner(scheduled_date),
+        strength_exercises(exercise_name,muscle_group,target_reps,strength_sets(performed_load_kg,performed_reps,rpe,completed))
+      `)
+      .eq("profile_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    const { data: recentCheckins } = await supabase
+      .from("daily_checkins")
+      .select("checkin_date,readiness_score,sleep_hours,fatigue,muscle_soreness,motivation")
+      .eq("profile_id", profile.id)
+      .order("checkin_date", { ascending: false })
+      .limit(7);
+
+    const { data: athleteMemory } = await supabase
+      .from("athlete_memory")
+      .select("memory_key,memory_value,confidence")
+      .eq("profile_id", profile.id)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    const finalizedHistory = previousSessions.filter((item) => ["completed", "missed", "cancelled"].includes(item.status));
+    const completedHistory = finalizedHistory.filter((item) => item.status === "completed");
+    if (finalizedHistory.length) {
+      const adherence = Math.round((completedHistory.length / finalizedHistory.length) * 100);
+      await supabase.from("athlete_memory").upsert({
+        profile_id: profile.id,
+        memory_key: "recent_adherence",
+        memory_value: `Aderência recente: ${adherence}% em ${finalizedHistory.length} sessões finalizadas.`,
+        confidence: 0.9,
+        source: "system",
+        last_observed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "profile_id,memory_key" });
+    }
 
     const requestedTrainingFrequency = Math.min(
       Math.max(profile.training_frequency ?? 4, 1),
@@ -499,6 +560,10 @@ Cadência: ${session.cadence ?? "não informada"} rpm
 Ganho de elevação: ${
                 session.elevation_gain ?? "não informado"
               } metros
+Tipo: ${session.session_type ?? "bike"}
+Data original: ${session.original_scheduled_date ?? "igual à atual"}
+Motivo do reagendamento: ${session.reschedule_reason ?? "nenhum"}
+Motivo de não realização: ${session.missed_reason ?? "nenhum"}
 `,
             )
             .join("\n");
@@ -607,6 +672,15 @@ HISTÓRICO DOS ÚLTIMOS TREINOS
 
 ${historyText}
 
+HISTÓRICO ESTRUTURADO DE MUSCULAÇÃO
+${JSON.stringify(strengthHistory ?? [])}
+
+CHECK-INS RECENTES DE PRONTIDÃO
+${JSON.stringify(recentCheckins ?? [])}
+
+MEMÓRIA ESPORTIVA DO ATLETA
+${(athleteMemory ?? []).map((m: any) => `${m.memory_key}: ${m.memory_value}`).join("\n") || "Sem memória consolidada ainda."}
+
 SEMANA A SER PLANEJADA
 
 As únicas datas permitidas são:
@@ -618,9 +692,14 @@ REGRAS OBRIGATÓRIAS
 - Crie exatamente ${weeklyBikeDays} treinos de ciclismo e exatamente ${requestedStrengthDays} treinos de musculação.
 - Cada sessão deve informar "type": "bike" ou "strength".
 - Para musculação, use os dias de academia quando informados e detalhe exercícios, séries, repetições, descanso e orientação de carga.
+- Toda sessão de musculação DEVE incluir o campo "focus" e um array "exercises" com 5 a 8 exercícios estruturados.
+- Cada exercício deve ter name, muscleGroup, sets, reps, loadKg (use null quando não houver histórico de carga), restSeconds e instructions.
+- Preserve exercícios principais entre semanas quando houver histórico, promovendo progressão gradual em vez de trocar a ficha inteira.
 - Para musculação use zone "Z1" apenas como valor técnico do sistema; a intensidade real deve estar descrita no texto.
-- Pode haver ciclismo e musculação no mesmo dia se isso respeitar a recuperação e a disponibilidade.
-- Use somente as datas permitidas.
+- A IA define o CONTEÚDO e a prioridade fisiológica das sessões. O Athlos fará a distribuição final dos dias com um motor de periodização.
+- Evite sugerir musculação pesada de pernas junto ou na véspera de tiros, limiar, VO2 ou longão.
+- Para o longão, considere que ele deve ocupar a maior janela de tempo disponível da semana.
+- Use somente as datas permitidas como referência; a data final será validada pelo motor de agenda.
 - Respeite os dias disponíveis do atleta.
 - Respeite o tempo disponível em cada dia.
 - Considere os dias de musculação para evitar excesso de carga.
@@ -646,7 +725,21 @@ FORMATO OBRIGATÓRIO
       "date": "AAAA-MM-DD",
       "duration": 60,
       "zone": "Z2",
-      "type": "bike"
+      "type": "bike",
+      "focus": "",
+      "exercises": []
+    },
+    {
+      "title": "Treino A — Pernas e core",
+      "description": "orientações gerais",
+      "date": "AAAA-MM-DD",
+      "duration": 55,
+      "zone": "Z1",
+      "type": "strength",
+      "focus": "Força de pernas sem comprometer o pedal intenso",
+      "exercises": [
+        {"name":"Agachamento","muscleGroup":"Pernas","sets":3,"reps":"8-10","loadKg":null,"restSeconds":120,"instructions":"Técnica controlada"}
+      ]
     }
   ]
 }
@@ -684,83 +777,115 @@ FORMATO OBRIGATÓRIO
       );
     }
 
-    const expectedTotalSessions = weeklyBikeDays + requestedStrengthDays;
+    const normalizeSessionType = (session: GeminiSession): "bike" | "strength" => {
+      const title = String(session.title ?? "").toLowerCase();
+      const focus = String(session.focus ?? "").toLowerCase();
+      const hasExercises = Array.isArray(session.exercises) && session.exercises.length > 0;
 
-    if (plan.sessions.length !== expectedTotalSessions) {
-      throw new Error(
-        `A IA retornou ${plan.sessions.length} treinos, mas deveria retornar ${expectedTotalSessions} (${weeklyBikeDays} de ciclismo e ${requestedStrengthDays} de musculação).`,
-      );
-    }
+      if (
+        session.type === "strength" ||
+        hasExercises ||
+        /muscula|força|forca|academia|agachamento|supino|remada/.test(`${title} ${focus}`)
+      ) {
+        return "strength";
+      }
 
-    const bikeSessions = plan.sessions.filter((session) => session.type !== "strength");
-    const strengthSessions = plan.sessions.filter((session) => session.type === "strength");
-
-    if (bikeSessions.length !== weeklyBikeDays || strengthSessions.length !== requestedStrengthDays) {
-      throw new Error(
-        `A IA não respeitou a divisão do plano: esperado ${weeklyBikeDays} ciclismo e ${requestedStrengthDays} musculação.`,
-      );
-    }
-
-    /*
-     * 7. Validar os treinos
-     */
-    const usedDatesByType = {
-      bike: new Set<string>(),
-      strength: new Set<string>(),
+      return "bike";
     };
 
-    const trainings: Training[] = plan.sessions.map(
-      (session, index) => {
-        const sessionType = session.type === "strength" ? "strength" : "bike";
-        const usedDates = usedDatesByType[sessionType];
-        const availableFallbackDate =
-          plannedWeekDates.find((date) => !usedDates.has(date)) ??
-          plannedWeekDates[Math.min(index, plannedWeekDates.length - 1)];
+    // Modelos gratuitos podem devolver sessões extras. O Athlos, e não a IA,
+    // controla a quantidade final do plano. Normalizamos o tipo, separamos as
+    // modalidades e mantemos exatamente a quantidade configurada no perfil.
+    const normalizedSessions = plan.sessions.map((session) => ({
+      ...session,
+      type: normalizeSessionType(session),
+    }));
 
-        const validDate =
-          plannedWeekDates.includes(session.date) && !usedDates.has(session.date)
-            ? session.date
-            : availableFallbackDate;
+    const bikeSessions = normalizedSessions
+      .filter((session) => session.type === "bike")
+      .slice(0, weeklyBikeDays);
+    const strengthSessions = normalizedSessions
+      .filter((session) => session.type === "strength")
+      .slice(0, requestedStrengthDays);
 
-        usedDates.add(validDate);
+    if (bikeSessions.length < weeklyBikeDays || strengthSessions.length < requestedStrengthDays) {
+      throw new Error(
+        `A IA não retornou treinos suficientes. Recebidos: ${bikeSessions.length}/${weeklyBikeDays} de ciclismo e ${strengthSessions.length}/${requestedStrengthDays} de musculação. Tente gerar novamente.`,
+      );
+    }
 
-        const validZone =
+    // Daqui em diante trabalhamos somente com a quantidade correta.
+    plan.sessions = [...bikeSessions, ...strengthSessions];
+
+    /*
+     * 7. Validar conteúdo e distribuir a semana com o motor de periodização.
+     * A IA cria as sessões; o código decide os dias para evitar conflitos.
+     */
+    const contentSessions = plan.sessions.map((session, index) => {
+      const sessionType = session.type === "strength" ? "strength" : "bike";
+      const validZone =
+        sessionType === "strength"
+          ? "Z1"
+          : isValidZone(session.zone)
+            ? session.zone
+            : "Z2";
+      const suppliedDuration = Number(session.duration);
+      const validDuration = Number.isFinite(suppliedDuration) && suppliedDuration > 0
+        ? Math.round(suppliedDuration)
+        : 60;
+
+      return {
+        id: String(index),
+        title:
           sessionType === "strength"
-            ? "Z1"
-            : isValidZone(session.zone)
-              ? session.zone
-              : "Z2";
+            ? `Musculação — ${(session.title?.trim() || `Treino ${index + 1}`)
+                .replace(/^muscula(?:ção|cao)\s*(?:—|-|:)\s*/i, "")
+                .trim()}`
+            : session.title?.trim() || `Treino ${index + 1}`,
+        description: session.description?.trim() || "Treino gerado pelo treinador Athlos AI.",
+        duration: validDuration,
+        zone: validZone,
+        type: sessionType as "bike" | "strength",
+        focus: session.focus?.trim() || "",
+        exercises: session.exercises ?? [],
+        preferredDate: plannedWeekDates.includes(session.date) ? session.date : null,
+      };
+    });
 
-        const suppliedDuration = Number(session.duration);
-
-        const validDuration =
-          Number.isFinite(suppliedDuration) &&
-          suppliedDuration > 0
-            ? Math.round(suppliedDuration)
-            : 60;
-
-        return {
-          id: crypto.randomUUID(),
-          title:
-            sessionType === "strength"
-              ? `Musculação — ${session.title?.trim() || `Treino ${index + 1}`}`
-              : session.title?.trim() || `Treino ${index + 1}`,
-          description:
-            session.description?.trim() ||
-            "Treino gerado pelo treinador Athlos AI.",
-          date: validDate,
-          duration: validDuration,
-          zone: validZone,
-          status: "planned",
-        };
+    const scheduledSessions = scheduleTrainingWeek(
+      contentSessions,
+      plannedWeekDates,
+      {
+        availableDays: profile.available_days,
+        gymDays: profile.gym_days,
+        availableMinutesByDay: profile.available_minutes_by_day,
       },
     );
 
-    trainings.sort(
-      (first, second) =>
-        new Date(first.date).getTime() -
-        new Date(second.date).getTime(),
-    );
+    const trainings: Training[] = scheduledSessions.map((session) => ({
+      id: crypto.randomUUID(),
+      title: session.title,
+      description: `${session.description}\n\nOrganização da semana: ${session.scheduleReason}`,
+      date: session.date,
+      duration: session.duration,
+      zone: session.zone as Training["zone"],
+      status: "planned",
+      type: session.type,
+    }));
+
+    trainings.sort((first, second) => first.date.localeCompare(second.date));
+
+    // Mantém a data organizada pelo motor também na estrutura usada para criar as fichas.
+    plan.sessions = scheduledSessions.map((session) => ({
+      title: session.title.replace(/^Musculação\s*—\s*/i, ""),
+      description: session.description ?? "",
+      date: session.date,
+      duration: session.duration,
+      zone: String(session.zone ?? "Z1"),
+      type: session.type === "strength" ? "strength" : "bike",
+      focus: session.focus ?? "",
+      exercises: session.exercises as GeminiExercise[],
+    }));
 
     /*
      * 8. Criar o plano
@@ -808,6 +933,7 @@ FORMATO OBRIGATÓRIO
       zone: training.zone,
       status: training.status,
       generated_by_ai: true,
+      session_type: training.type ?? (training.title.startsWith("Musculação") ? "strength" : "bike"),
     }));
 
     const { data: savedSessions, error: saveSessionsError } =
@@ -821,7 +947,8 @@ FORMATO OBRIGATÓRIO
           scheduled_date,
           duration_minutes,
           zone,
-          status
+          status,
+          session_type
         `);
 
     if (saveSessionsError || !savedSessions) {
@@ -840,6 +967,60 @@ FORMATO OBRIGATÓRIO
       );
     }
 
+    // 10. Para sessões de musculação, salva a ficha estruturada em tabelas próprias.
+    for (const savedSession of savedSessions) {
+      if ((savedSession as any).session_type !== "strength") continue;
+
+      const aiSession = plan.sessions.find((item) => {
+        const expectedTitle = `Musculação — ${item.title?.trim() || ""}`;
+        return item.type === "strength" && item.date === savedSession.scheduled_date && expectedTitle === savedSession.title;
+      }) ?? plan.sessions.find((item) => item.type === "strength" && item.date === savedSession.scheduled_date);
+
+      const exercises = aiSession?.exercises?.length ? aiSession.exercises : [
+        { name: "Agachamento", muscleGroup: "Pernas", sets: 3, reps: "8-10", loadKg: null, restSeconds: 120, instructions: "Execução controlada; pare antes da falha." },
+        { name: "Levantamento terra romeno", muscleGroup: "Posterior", sets: 3, reps: "8-10", loadKg: null, restSeconds: 120, instructions: "Mantenha a coluna neutra." },
+        { name: "Remada", muscleGroup: "Costas", sets: 3, reps: "10-12", loadKg: null, restSeconds: 90, instructions: "Controle a fase excêntrica." },
+        { name: "Supino", muscleGroup: "Peito", sets: 3, reps: "8-12", loadKg: null, restSeconds: 90, instructions: "Evite falha muscular." },
+        { name: "Prancha", muscleGroup: "Core", sets: 3, reps: "30", loadKg: null, restSeconds: 60, instructions: "30 segundos por série." },
+      ];
+
+      const { data: workout, error: workoutError } = await supabase.from("strength_workouts").insert({
+        profile_id: profile.id,
+        training_session_id: savedSession.id,
+        workout_label: aiSession?.title?.trim() || "Treino de força",
+        focus: aiSession?.focus?.trim() || "Força complementar ao ciclismo",
+        status: "planned",
+      }).select("id").single();
+      if (workoutError || !workout) throw new Error(`Erro ao criar ficha de musculação: ${workoutError?.message ?? "registro não retornado"}`);
+
+      for (const [exerciseIndex, exercise] of exercises.entries()) {
+        const sets = Math.min(Math.max(Number(exercise.sets) || 3, 1), 6);
+        const repsText = String(exercise.reps || "10");
+        const firstRep = Number((repsText.match(/\d+/) || ["10"])[0]);
+        const { data: savedExercise, error: exerciseError } = await supabase.from("strength_exercises").insert({
+          workout_id: workout.id,
+          exercise_name: exercise.name?.trim() || `Exercício ${exerciseIndex + 1}`,
+          muscle_group: exercise.muscleGroup?.trim() || null,
+          exercise_order: exerciseIndex + 1,
+          target_sets: sets,
+          target_reps: repsText,
+          target_load_kg: exercise.loadKg == null ? null : (Number.isFinite(Number(exercise.loadKg)) ? Number(exercise.loadKg) : null),
+          rest_seconds: Math.min(Math.max(Number(exercise.restSeconds) || 90, 30), 300),
+          instructions: exercise.instructions?.trim() || null,
+        }).select("id").single();
+        if (exerciseError || !savedExercise) throw new Error(`Erro ao criar exercício: ${exerciseError?.message ?? "registro não retornado"}`);
+
+        const setRows = Array.from({ length: sets }, (_, setIndex) => ({
+          exercise_id: savedExercise.id,
+          set_number: setIndex + 1,
+          planned_reps: firstRep,
+          planned_load_kg: exercise.loadKg == null ? null : (Number.isFinite(Number(exercise.loadKg)) ? Number(exercise.loadKg) : null),
+        }));
+        const { error: setsError } = await supabase.from("strength_sets").insert(setRows);
+        if (setsError) throw new Error(`Erro ao criar séries: ${setsError.message}`);
+      }
+    }
+
     const returnedTrainings: Training[] = savedSessions.map(
       (session) => ({
         id: session.id,
@@ -849,6 +1030,7 @@ FORMATO OBRIGATÓRIO
         duration: session.duration_minutes,
         zone: session.zone as Training["zone"],
         status: session.status as Training["status"],
+        type: (session as any).session_type as Training["type"],
       }),
     );
 

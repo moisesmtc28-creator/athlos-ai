@@ -13,6 +13,8 @@ export type TrainingStatus =
   | "missed"
   | "cancelled";
 
+export type TrainingType = "bike" | "strength" | "recovery";
+
 export interface Training {
   id: string;
   title: string;
@@ -21,6 +23,9 @@ export interface Training {
   duration: number;
   zone: TrainingZone;
   status: TrainingStatus;
+  type?: TrainingType;
+  originalDate?: string | null;
+  rescheduleReason?: string | null;
 }
 
 export interface TrainingDetails extends Training {
