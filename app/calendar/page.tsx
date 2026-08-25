@@ -30,6 +30,8 @@ function mondayOf(date: Date) {
   const d = new Date(date); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); d.setHours(12,0,0,0); return d;
 }
 function niceDate(date: Date) { return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(date); }
+function fullDay(date: Date) { return new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).format(date); }
+
 function TrainingChip({ training, weekDates, onMove }: { training: Training; weekDates: Date[]; onMove: (id: string, date: string) => Promise<void> }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: training.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
@@ -44,6 +46,7 @@ function TrainingChip({ training, weekDates, onMove }: { training: Training; wee
           {training.originalDate && training.originalDate !== training.date && <span className="mt-1 block text-[10px] text-amber-300">Reagendado</span>}
         </Link>
       </div>
+
       <div className="mt-3 flex items-center gap-2 sm:hidden">
         <MoveRight size={14} className="shrink-0 opacity-70" />
         <select
@@ -65,7 +68,6 @@ function DayColumn({ date, trainings, weekDates, onMove }: { date: Date; trainin
   const isToday = key === iso(new Date());
   return (
     <div ref={setNodeRef} className={`min-h-36 rounded-2xl border p-3 transition sm:min-h-48 ${isOver ? "border-emerald-400 bg-emerald-500/10" : "border-zinc-800 bg-zinc-900"}`}>
-
       <div className="mb-3 flex items-center justify-between">
         <div><p className="text-xs uppercase text-zinc-500">{dayLabels[(date.getDay()+6)%7]}</p><p className={`text-lg font-bold ${isToday ? "text-emerald-400" : "text-white"}`}>{niceDate(date)}</p></div>
         <span className="text-xs text-zinc-600">{trainings.length}</span>
@@ -139,7 +141,6 @@ export default function CalendarPage() {
         {isLoading ? <p className="mt-8 text-zinc-400">Carregando...</p> : isError ? <p className="mt-8 text-red-400">Erro ao carregar treinos.</p> : (
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">{weekDates.map((date) => <DayColumn key={iso(date)} date={date} weekDates={weekDates} onMove={handleMove} trainings={weekTrainings.filter((training) => training.date === iso(date))}/>)}</div>
-
           </DndContext>
         )}
       </div></section>
