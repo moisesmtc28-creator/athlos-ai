@@ -370,7 +370,8 @@ export async function POST(request: NextRequest) {
             scheduled_date,
             duration_minutes,
             zone,
-            status
+            status,
+            session_type
           `)
           .eq("plan_id", existingPlan.id)
           .order("scheduled_date", { ascending: true });
@@ -391,6 +392,7 @@ export async function POST(request: NextRequest) {
             duration: session.duration_minutes,
             zone: session.zone as Training["zone"],
             status: session.status as Training["status"],
+            type: (session.session_type === "strength" ? "strength" : session.session_type === "recovery" ? "recovery" : "bike") as Training["type"],
           }),
         );
 
@@ -1045,10 +1047,26 @@ FORMATO OBRIGATÓRIO
       },
     });
   } catch (error) {
-    console.error("Erro ao gerar plano com Gemini:", {
+    console.error("Erro ao gerar plano:", {
       createdPlanId,
       error,
     });
+
+    // Se qualquer etapa depois da criação do plano falhar (incluindo a criação
+    // das fichas de musculação), removemos o plano recém-criado. Como as
+    // sessões e fichas possuem ON DELETE CASCADE, isso evita deixar uma semana
+    // parcialmente salva que seria reutilizada na próxima tentativa.
+    if (createdPlanId) {
+      try {
+        const accessToken = getBearerToken(request);
+        if (accessToken) {
+          const cleanupClient = createAuthenticatedClient(accessToken);
+          await cleanupClient.from("training_plans").delete().eq("id", createdPlanId);
+        }
+      } catch (cleanupError) {
+        console.error("Falha ao limpar plano incompleto:", cleanupError);
+      }
+    }
 
     const message =
       error instanceof Error

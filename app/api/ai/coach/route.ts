@@ -284,11 +284,39 @@ REGRAS: use apenas ids existentes; não invente treinos; se o pedido for geral p
             summary?: string;
           };
           const knownIds = new Set(plannedRows.map((row) => row.id));
-          const requestedMoves = (action.moves ?? []).filter((move) => knownIds.has(move.id) && allowedDates.includes(move.date));
+          const rowById = new Map(plannedRows.map((row) => [row.id, row]));
+          const requestedMoves = (action.moves ?? []).filter(
+            (move) => knownIds.has(move.id) && allowedDates.includes(move.date),
+          );
           const nextWeekRequested = /pr[oó]xima\s+semana/i.test(message);
           const nextWeekAnchor = nextWeekRequested ? addIsoDays(weekBounds(today).start, 7) : null;
+
+          // Primeiro aplica apenas os movimentos explicitamente pedidos pelo atleta.
+          // Depois o motor reorganiza a semana de origem e a de destino. Isso evita
+          // o erro antigo em que um treino movido para outra semana não era encontrado
+          // porque o algoritmo analisava somente a semana de destino.
+          for (const move of requestedMoves) {
+            const current = rowById.get(move.id);
+            if (!current || current.scheduled_date === move.date) continue;
+            const reason = move.reason?.trim() || "Alteração solicitada pelo atleta ao Coach";
+            const { error: moveError } = await supabase
+              .from("training_sessions")
+              .update({
+                scheduled_date: move.date,
+                original_scheduled_date: current.original_scheduled_date ?? current.scheduled_date,
+                reschedule_reason: reason,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", move.id);
+            if (moveError) throw new Error(moveError.message);
+            calendarChanges.push({ id: move.id, from: current.scheduled_date, to: move.date, reason });
+          }
+
           const affectedDates = requestedMoves.length
-            ? requestedMoves.map((move) => move.date)
+            ? requestedMoves.flatMap((move) => {
+                const current = rowById.get(move.id);
+                return current ? [current.scheduled_date, move.date] : [move.date];
+              })
             : action.reorganize
               ? [nextWeekAnchor ?? plannedRows[0].scheduled_date]
               : [];
@@ -300,20 +328,41 @@ REGRAS: use apenas ids existentes; não invente treinos; se o pedido for geral p
           }
 
           for (const bounds of affectedWeeks.values()) {
-            const rows = plannedRows.filter((row) => row.scheduled_date >= bounds.start && row.scheduled_date <= bounds.end);
+            // Consulta novamente após os movimentos explícitos para trabalhar com
+            // o calendário real, inclusive quando houve mudança entre semanas.
+            const { data: weekRows, error: weekRowsError } = await supabase
+              .from("training_sessions")
+              .select("id,title,description,scheduled_date,duration_minutes,zone,status,session_type,original_scheduled_date")
+              .eq("profile_id", profile.id)
+              .gte("scheduled_date", bounds.start)
+              .lte("scheduled_date", bounds.end)
+              .in("status", ["planned", "in_progress"])
+              .order("scheduled_date");
+            if (weekRowsError) throw new Error(weekRowsError.message);
+            const rows = weekRows ?? [];
             if (!rows.length) continue;
+
             const forcedDates: Record<string, string> = {};
             for (const move of requestedMoves) {
               if (move.date >= bounds.start && move.date <= bounds.end) forcedDates[move.id] = move.date;
             }
+
             const schedule = scheduleTrainingWeek(
               rows.map((row) => ({
-                id: row.id, title: row.title, description: row.description, duration: row.duration_minutes,
-                zone: row.zone, type: row.session_type === "strength" ? "strength" as const : row.session_type === "recovery" ? "recovery" as const : "bike" as const,
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                duration: row.duration_minutes,
+                zone: row.zone,
+                type: row.session_type === "strength" ? "strength" as const : row.session_type === "recovery" ? "recovery" as const : "bike" as const,
                 preferredDate: row.scheduled_date,
               })),
               bounds.dates,
-              { availableDays: profile.available_days, gymDays: profile.gym_days, availableMinutesByDay: profile.available_minutes_by_day },
+              {
+                availableDays: profile.available_days,
+                gymDays: profile.gym_days,
+                availableMinutesByDay: profile.available_minutes_by_day,
+              },
               forcedDates,
             );
 
@@ -322,13 +371,24 @@ REGRAS: use apenas ids existentes; não invente treinos; se o pedido for geral p
               if (!current || current.scheduled_date === scheduled.date) continue;
               const requestedReason = requestedMoves.find((move) => move.id === scheduled.id)?.reason;
               const reason = requestedReason || scheduled.scheduleReason;
-              const { error: updateError } = await supabase.from("training_sessions").update({
-                scheduled_date: scheduled.date,
-                original_scheduled_date: current.original_scheduled_date ?? current.scheduled_date,
-                reschedule_reason: reason,
-                updated_at: new Date().toISOString(),
-              }).eq("id", scheduled.id);
-              if (!updateError) calendarChanges.push({ id: scheduled.id!, from: current.scheduled_date, to: scheduled.date, reason });
+              const { error: updateError } = await supabase
+                .from("training_sessions")
+                .update({
+                  scheduled_date: scheduled.date,
+                  original_scheduled_date: current.original_scheduled_date ?? current.scheduled_date,
+                  reschedule_reason: reason,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", scheduled.id);
+              if (updateError) throw new Error(updateError.message);
+
+              const alreadyLogged = calendarChanges.find((change) => change.id === scheduled.id);
+              if (alreadyLogged) {
+                alreadyLogged.to = scheduled.date;
+                alreadyLogged.reason = reason;
+              } else {
+                calendarChanges.push({ id: scheduled.id!, from: current.scheduled_date, to: scheduled.date, reason });
+              }
             }
           }
 

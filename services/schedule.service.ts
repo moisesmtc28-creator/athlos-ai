@@ -13,7 +13,7 @@ function weekBounds(dateValue: string) {
 export async function moveTraining(trainingId: string, newDate: string, reason = "Movido pelo atleta no calendário") {
   const { data: current, error: readError } = await supabase
     .from("training_sessions")
-    .select("scheduled_date, original_scheduled_date")
+    .select("scheduled_date, original_scheduled_date, reschedule_reason")
     .eq("id", trainingId)
     .single();
   if (readError) throw new Error(readError.message);
@@ -34,7 +34,8 @@ export async function moveTraining(trainingId: string, newDate: string, reason =
     // Evita mostrar sucesso parcial: se o rebalanceamento falhar, devolve o treino para a data anterior.
     await supabase.from("training_sessions").update({
       scheduled_date: current.scheduled_date,
-      reschedule_reason: current.original_scheduled_date ? reason : null,
+      original_scheduled_date: current.original_scheduled_date,
+      reschedule_reason: current.reschedule_reason,
       updated_at: new Date().toISOString(),
     }).eq("id", trainingId);
     throw reorganizeError;
