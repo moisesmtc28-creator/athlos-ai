@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { askGemini } from "@/services/ai-provider";
 import { scheduleTrainingWeek } from "@/services/planning-engine";
+import { buildProfessionalWeek, professionalPlanSummary, validateProfessionalWeek, type ProfessionalSlot, type TrainingRole } from "@/services/professional-plan";
 import type { Training } from "@/types/training";
 
 type AthleteProfile = {
@@ -86,6 +87,7 @@ type GeminiSession = {
   type?: "bike" | "strength";
   focus?: string;
   exercises?: GeminiExercise[];
+  role?: TrainingRole;
 };
 
 type GeminiPlan = {
@@ -149,6 +151,172 @@ function fallbackStrengthSession(index: number): GeminiSession & { type: "streng
   ];
   const template = templates[index % templates.length];
   return { ...template, date: "" };
+}
+
+
+function inferTrainingRole(session: GeminiSession): TrainingRole | null {
+  if (session.role) return session.role;
+  const text = `${session.title ?? ""} ${session.focus ?? ""} ${session.description ?? ""}`.toLowerCase();
+  if (session.type === "strength" || /muscula|academia|agach|supino|remada|core/.test(text)) {
+    if (/superior|postur|escap|costas|peito|ombro/.test(text) && !/perna|quadr|gl[uú]te|posterior|agach|terra|afundo/.test(text)) return "strength_upper_posture";
+    if (/unilateral|posterior|step|afundo|avan[cç]o|hip thrust/.test(text)) return "strength_lower_unilateral";
+    if (/preven|mobil|core|estabil/.test(text) && !/perna|quadr|gl[uú]te|posterior|agach|terra/.test(text)) return "strength_core_prevention";
+    if (/perna|quadr|gl[uú]te|agach|terra|for[cç]a/.test(text)) return "strength_lower_heavy";
+    return "strength_full_body";
+  }
+  if (/long[aã]o|fundo|endurance longo|resist[eê]ncia longa/.test(text) || Number(session.duration) >= 100) return "bike_long";
+  if (/vo2|z5|z6|anaer[oó]b|sprint/.test(text)) return "bike_vo2";
+  if (/limiar|z4|sweet spot|sub[- ]?limiar|tiro/.test(text)) return "bike_threshold";
+  if (/tempo|ritmo sustentado|z3/.test(text)) return "bike_tempo";
+  if (/recuper|regener|z1|leve/.test(text)) return "bike_recovery";
+  return "bike_endurance";
+}
+
+function fallbackForProfessionalSlot(slot: ProfessionalSlot): GeminiSession {
+  const base: GeminiSession = {
+    title: slot.label,
+    description: slot.purpose,
+    date: "",
+    duration: slot.targetDuration,
+    zone: slot.preferredZone,
+    type: slot.type,
+    focus: slot.purpose,
+    exercises: [],
+    role: slot.role,
+  };
+
+  if (slot.type === "bike") {
+    if (slot.role === "bike_long") return { ...base, title: "Longão de Endurance", description: "Pedal longo predominantemente em Z2, com ritmo constante. Pratique hidratação e alimentação. Evite picos desnecessários de intensidade." };
+    if (slot.role === "bike_vo2") return { ...base, title: "Intervalos de VO2 Controlados", description: "Aqueça 15 min. Execute blocos curtos em Z5 com recuperação completa, preservando qualidade. Desaqueça 10 min." };
+    if (slot.role === "bike_threshold") return { ...base, title: "Limiar Controlado", description: "Aqueça 15 min. Faça blocos em Z4 com recuperação ativa suficiente para manter técnica e consistência. Finalize leve." };
+    if (slot.role === "bike_tempo") return { ...base, title: "Ritmo Sustentado", description: "Sessão de tempo em Z3 com blocos sustentados, cadência fluida e controle de esforço." };
+    if (slot.role === "bike_recovery") return { ...base, title: "Recuperação Ativa e Técnica", description: "Pedal muito leve em Z1, focado em soltar as pernas, cadência e técnica. Sem esforços adicionais." };
+    return { ...base, title: "Base Aeróbica", description: "Pedal contínuo em Z2, confortável e estável, priorizando eficiência e baixa fadiga." };
+  }
+
+  const strengthTemplateIndex: Record<string, number> = {
+    strength_lower_heavy: 0,
+    strength_upper_posture: 1,
+    strength_lower_unilateral: 2,
+    strength_core_prevention: 3,
+    strength_full_body: 0,
+  };
+  const template = fallbackStrengthSession(strengthTemplateIndex[slot.role] ?? 3);
+  if (slot.role === "strength_full_body") {
+    return {
+      ...template,
+      role: slot.role,
+      title: "Força Geral do Ciclista",
+      focus: slot.purpose,
+      duration: slot.targetDuration,
+      exercises: [
+        { name: "Agachamento goblet", muscleGroup: "Pernas", sets: 3, reps: "8-10", loadKg: null, restSeconds: 90, instructions: "RIR 2-3, técnica perfeita." },
+        { name: "Levantamento terra romeno", muscleGroup: "Posterior", sets: 3, reps: "8-10", loadKg: null, restSeconds: 90, instructions: "Quadril para trás e coluna neutra." },
+        { name: "Remada", muscleGroup: "Costas", sets: 3, reps: "10-12", loadKg: null, restSeconds: 75, instructions: "Controle escapular." },
+        { name: "Supino com halteres", muscleGroup: "Peito", sets: 3, reps: "8-12", loadKg: null, restSeconds: 75, instructions: "Pare antes da falha." },
+        { name: "Pallof press", muscleGroup: "Core", sets: 3, reps: "10 por lado", loadKg: null, restSeconds: 60, instructions: "Resista à rotação." },
+      ],
+    };
+  }
+  return { ...template, role: slot.role, title: slot.label, focus: slot.purpose, duration: slot.targetDuration };
+}
+
+function isLowerBodyExercise(exercise: GeminiExercise): boolean {
+  const text = `${exercise.name ?? ""} ${exercise.muscleGroup ?? ""}`.toLowerCase();
+  return /perna|quadr|gl[uú]te|posterior|panturr|agach|terra|afundo|avan[cç]o|leg press|flexora|extensora|hip thrust|step/.test(text);
+}
+
+function sanitizeStrengthExercises(
+  exercises: GeminiExercise[] | undefined,
+  fallbackExercises: GeminiExercise[] | undefined,
+  role: TrainingRole,
+): GeminiExercise[] {
+  const source = Array.isArray(exercises) ? exercises.filter((exercise) => exercise?.name?.trim()) : [];
+  const fallback = Array.isArray(fallbackExercises) ? fallbackExercises : [];
+  let filtered = source;
+
+  // Superiores/core/prevenção não podem virar uma segunda ficha de pernas.
+  if (role === "strength_upper_posture" || role === "strength_core_prevention") {
+    filtered = source.filter((exercise) => !isLowerBodyExercise(exercise));
+  }
+
+  // Em sessão unilateral permitimos pernas, mas com volume menor: no máximo 3 exercícios de MMII.
+  if (role === "strength_lower_unilateral") {
+    let lowerCount = 0;
+    filtered = source.filter((exercise) => {
+      if (!isLowerBodyExercise(exercise)) return true;
+      lowerCount += 1;
+      return lowerCount <= 3;
+    });
+  }
+
+  const names = new Set(filtered.map((exercise) => exercise.name.trim().toLowerCase()));
+  for (const exercise of fallback) {
+    if (filtered.length >= 5) break;
+    if (!exercise.name?.trim()) continue;
+    if ((role === "strength_upper_posture" || role === "strength_core_prevention") && isLowerBodyExercise(exercise)) continue;
+    const key = exercise.name.trim().toLowerCase();
+    if (!names.has(key)) {
+      filtered.push(exercise);
+      names.add(key);
+    }
+  }
+
+  return filtered.slice(0, 8);
+}
+
+function buildRecentStrengthLoadMap(history: any[]): Map<string, number> {
+  const loads = new Map<string, number>();
+  for (const workout of history ?? []) {
+    for (const exercise of workout?.strength_exercises ?? []) {
+      const key = String(exercise?.exercise_name ?? "").trim().toLowerCase();
+      if (!key || loads.has(key)) continue;
+      const completedLoads = (exercise?.strength_sets ?? [])
+        .filter((set: any) => set?.completed && Number.isFinite(Number(set?.performed_load_kg)))
+        .map((set: any) => Number(set.performed_load_kg))
+        .filter((value: number) => value > 0);
+      if (completedLoads.length) loads.set(key, Math.max(...completedLoads));
+    }
+  }
+  return loads;
+}
+
+function applyStrengthHistory(session: GeminiSession, loads: Map<string, number>): GeminiSession {
+  if (session.type !== "strength" || !session.exercises?.length || !loads.size) return session;
+  return {
+    ...session,
+    exercises: session.exercises.map((exercise) => {
+      const previous = loads.get(String(exercise.name ?? "").trim().toLowerCase());
+      if (!previous) return exercise;
+      return {
+        ...exercise,
+        loadKg: exercise.loadKg == null ? previous : exercise.loadKg,
+        instructions: `${exercise.instructions?.trim() || "Execução técnica e controlada."} Referência da última carga concluída: ${previous} kg. Aumente somente se concluir todas as séries com técnica e RIR planejado.`,
+      };
+    }),
+  };
+}
+
+function fitSessionToSlot(session: GeminiSession | undefined, slot: ProfessionalSlot): GeminiSession {
+  const fallback = fallbackForProfessionalSlot(slot);
+  if (!session) return fallback;
+
+  const exercises = slot.type === "strength"
+    ? sanitizeStrengthExercises(session.exercises, fallback.exercises, slot.role)
+    : session.exercises;
+
+  return {
+    ...fallback,
+    ...session,
+    type: slot.type,
+    role: slot.role,
+    zone: slot.type === "strength" ? "Z1" : (isValidZone(session.zone) ? session.zone : slot.preferredZone),
+    duration: Number.isFinite(Number(session.duration)) && Number(session.duration) > 0
+      ? Math.min(Math.max(Math.round(Number(session.duration)), Math.max(30, slot.targetDuration - 20)), slot.targetDuration + 20)
+      : slot.targetDuration,
+    focus: session.focus?.trim() || slot.purpose,
+    exercises,
+  };
 }
 
 function formatDate(date: Date): string {
@@ -544,8 +712,11 @@ export async function POST(request: NextRequest) {
 
     const finalizedHistory = previousSessions.filter((item) => ["completed", "missed", "cancelled"].includes(item.status));
     const completedHistory = finalizedHistory.filter((item) => item.status === "completed");
-    if (finalizedHistory.length) {
-      const adherence = Math.round((completedHistory.length / finalizedHistory.length) * 100);
+    const recentAdherencePct = finalizedHistory.length
+      ? Math.round((completedHistory.length / finalizedHistory.length) * 100)
+      : null;
+    if (finalizedHistory.length && recentAdherencePct !== null) {
+      const adherence = recentAdherencePct;
       await supabase.from("athlete_memory").upsert({
         profile_id: profile.id,
         memory_key: "recent_adherence",
@@ -585,6 +756,36 @@ export async function POST(request: NextRequest) {
           4,
         )
       : 0;
+
+    const readinessValues = (recentCheckins ?? [])
+      .map((item: any) => Number(item.readiness_score))
+      .filter((value: number) => Number.isFinite(value));
+    const averageReadiness = readinessValues.length
+      ? Math.round(readinessValues.reduce((sum: number, value: number) => sum + value, 0) / readinessValues.length)
+      : null;
+
+    // SCRIPT PROFISSIONAL PRÉ-IA: define a estrutura fisiológica da semana antes
+    // de qualquer chamada ao modelo. A IA apenas detalha o conteúdo de cada slot.
+    const professionalSlots = buildProfessionalWeek({
+      bikeDays: weeklyBikeDays,
+      strengthDays: requestedStrengthDays,
+      cyclingLevel: profile.cycling_level,
+      goal: profile.goal,
+      goalDetails: profile.goal_details,
+      targetEventName: profile.target_event_name,
+      targetEventDate: profile.target_event_date,
+      weeklyHours: profile.weekly_hours,
+      longestRecentRideKm: profile.longest_recent_ride_km,
+      availableMinutesByDay: profile.available_minutes_by_day,
+      availableDays: profile.available_days,
+      averageReadiness,
+      recentAdherence: recentAdherencePct,
+    });
+
+    const professionalErrors = validateProfessionalWeek(professionalSlots, weeklyBikeDays, requestedStrengthDays);
+    if (professionalErrors.length) {
+      throw new Error(`Falha na estrutura profissional da semana: ${professionalErrors.join(" ")}`);
+    }
 
     const athleteAge = calculateAge(profile.birth_date);
 
@@ -750,10 +951,19 @@ As únicas datas permitidas são:
 
 ${plannedWeekDates.join(", ")}
 
+ESTRUTURA PROFISSIONAL DEFINIDA PELO ATHLOS ANTES DA IA
+
+${professionalPlanSummary(professionalSlots)}
+
+Você NÃO pode inventar, remover, duplicar ou trocar esses papéis fisiológicos. Gere exatamente uma sessão para cada role acima. O campo "role" é obrigatório e deve ser exatamente um dos roles fornecidos.
+
 REGRAS OBRIGATÓRIAS
 
-- Crie exatamente ${weeklyBikeDays} treinos de ciclismo e exatamente ${requestedStrengthDays} treinos de musculação.
-- Cada sessão deve informar "type": "bike" ou "strength".
+- Crie exatamente ${professionalSlots.length} sessões: uma e somente uma para cada role da estrutura profissional acima.
+- Cada sessão deve informar "role" exatamente igual ao slot correspondente e "type": "bike" ou "strength".
+- É PROIBIDO criar dois longões. O único role de longão permitido é "bike_long".
+- Não converta um slot de base/recuperação/tempo em outro longão.
+- Não converta musculação de superiores/core em sessão pesada de pernas.
 - Para musculação, use EXCLUSIVAMENTE os dias de academia quando informados e detalhe exercícios, séries, repetições, descanso e orientação de carga.
 - Nunca crie duas fichas de musculação para o mesmo dia.
 - As fichas de musculação precisam ter funções diferentes na semana. Não repita "pernas e core" em todas.
@@ -787,6 +997,7 @@ FORMATO OBRIGATÓRIO
   "weekGoal": "objetivo principal da semana",
   "sessions": [
     {
+      "role": "bike_endurance",
       "title": "nome do treino",
       "description": "instruções completas e objetivas",
       "date": "AAAA-MM-DD",
@@ -797,6 +1008,7 @@ FORMATO OBRIGATÓRIO
       "exercises": []
     },
     {
+      "role": "strength_lower_heavy",
       "title": "Treino A — Pernas e core",
       "description": "orientações gerais",
       "date": "AAAA-MM-DD",
@@ -848,45 +1060,32 @@ FORMATO OBRIGATÓRIO
       const title = String(session.title ?? "").toLowerCase();
       const focus = String(session.focus ?? "").toLowerCase();
       const hasExercises = Array.isArray(session.exercises) && session.exercises.length > 0;
-
-      if (
-        session.type === "strength" ||
-        hasExercises ||
-        /muscula|força|forca|academia|agachamento|supino|remada/.test(`${title} ${focus}`)
-      ) {
-        return "strength";
-      }
-
+      if (session.type === "strength" || hasExercises || /muscula|força|forca|academia|agachamento|supino|remada/.test(`${title} ${focus}`)) return "strength";
       return "bike";
     };
 
-    // Modelos gratuitos podem devolver sessões extras. O Athlos, e não a IA,
-    // controla a quantidade final do plano. Normalizamos o tipo, separamos as
-    // modalidades e mantemos exatamente a quantidade configurada no perfil.
-    const normalizedSessions = plan.sessions.map((session) => ({
+    // A estrutura fisiológica não é decidida pelo modelo. Cada resposta é
+    // encaixada em um slot profissional previamente calculado. Isso impede
+    // dois longões, quatro fichas de pernas ou ausência de um tipo de sessão.
+    const candidates = plan.sessions.map((session) => ({
       ...session,
       type: normalizeSessionType(session),
+      role: inferTrainingRole({ ...session, type: normalizeSessionType(session) }),
     }));
+    const used = new Set<number>();
 
-    const bikeSessions = normalizedSessions
-      .filter((session) => session.type === "bike")
-      .slice(0, weeklyBikeDays);
-    const strengthSessions = normalizedSessions
-      .filter((session) => session.type === "strength")
-      .slice(0, requestedStrengthDays);
-
-    // A resposta da IA é uma sugestão de conteúdo, não a autoridade sobre a
-    // quantidade. Se um modelo gratuito devolver menos sessões, completamos
-    // deterministicamente aqui. Assim uma resposta 3/4 nunca apaga a semana.
-    while (bikeSessions.length < weeklyBikeDays) {
-      bikeSessions.push(fallbackBikeSession(bikeSessions.length));
-    }
-    while (strengthSessions.length < requestedStrengthDays) {
-      strengthSessions.push(fallbackStrengthSession(strengthSessions.length));
-    }
-
-    // Daqui em diante o Athlos sempre trabalha com a quantidade configurada.
-    plan.sessions = [...bikeSessions, ...strengthSessions];
+    const recentStrengthLoads = buildRecentStrengthLoadMap(strengthHistory ?? []);
+    plan.sessions = professionalSlots.map((slot) => {
+      const selectedIndex = candidates.findIndex((session, index) =>
+        !used.has(index) && session.role === slot.role && session.type === slot.type,
+      );
+      // Se o modelo não entregou o role correto, usamos o fallback daquele
+      // slot em vez de reaproveitar outra sessão do mesmo tipo. Isso evita,
+      // por exemplo, transformar um segundo longão em "base" só no rótulo.
+      if (selectedIndex >= 0) used.add(selectedIndex);
+      const fitted = fitSessionToSlot(selectedIndex >= 0 ? candidates[selectedIndex] : undefined, slot);
+      return applyStrengthHistory(fitted, recentStrengthLoads);
+    });
 
     /*
      * 7. Validar conteúdo e distribuir a semana com o motor de periodização.
@@ -919,7 +1118,9 @@ FORMATO OBRIGATÓRIO
         type: sessionType as "bike" | "strength",
         focus: session.focus?.trim() || "",
         exercises: session.exercises ?? [],
-        preferredDate: plannedWeekDates.includes(session.date) ? session.date : null,
+        role: session.role ?? null,
+        // O dia é responsabilidade do motor profissional, não da sugestão da IA.
+        preferredDate: null,
       };
     });
 

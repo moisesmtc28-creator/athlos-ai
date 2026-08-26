@@ -1,3 +1,5 @@
+import type { TrainingRole } from "@/services/professional-plan";
+
 export type PlannerSessionType = "bike" | "strength" | "recovery";
 
 export type PlannerSession = {
@@ -10,6 +12,7 @@ export type PlannerSession = {
   focus?: string | null;
   exercises?: Array<{ muscleGroup?: string | null; name?: string | null }>;
   preferredDate?: string | null;
+  role?: TrainingRole | null;
 };
 
 export type PlannerProfile = {
@@ -37,6 +40,8 @@ function dayKey(date: string): string {
 
 function isStrengthLower(session: PlannerSession): boolean {
   if (session.type !== "strength") return false;
+  if (session.role === "strength_lower_heavy" || session.role === "strength_lower_unilateral" || session.role === "strength_full_body") return true;
+  if (session.role === "strength_upper_posture" || session.role === "strength_core_prevention") return false;
   const exerciseText = (session.exercises ?? []).map((exercise) => `${exercise.name ?? ""} ${exercise.muscleGroup ?? ""}`).join(" ");
   const text = `${session.title} ${session.focus ?? ""} ${session.description ?? ""} ${exerciseText}`;
   if (lowerBodyPattern.test(text)) return true;
@@ -45,11 +50,16 @@ function isStrengthLower(session: PlannerSession): boolean {
 }
 
 function isLongRide(session: PlannerSession): boolean {
-  return session.type === "bike" && (longRidePattern.test(`${session.title} ${session.description ?? ""}`) || session.duration >= 100);
+  if (session.type !== "bike") return false;
+  if (session.role === "bike_long") return true;
+  if (session.role && session.role !== "bike_long") return false;
+  return longRidePattern.test(`${session.title} ${session.description ?? ""}`) || session.duration >= 100;
 }
 
 function isHardBike(session: PlannerSession): boolean {
   if (session.type !== "bike") return false;
+  if (session.role === "bike_threshold" || session.role === "bike_vo2") return true;
+  if (session.role && ["bike_recovery", "bike_endurance", "bike_tempo", "bike_long"].includes(session.role)) return false;
   const zone = String(session.zone ?? "").toUpperCase();
   return ["Z4", "Z5", "Z6"].includes(zone) || hardBikePattern.test(`${session.title} ${session.description ?? ""}`);
 }
@@ -162,14 +172,21 @@ function placementPenalty<T extends PlannerSession>(
   if (session.preferredDate && session.preferredDate !== date) score += 8;
 
   if (isLongRide(session)) {
-    const capacities = weekDates
+    const longCandidates = allowedDates(session, weekDates, profile);
+    const weekendCandidates = longCandidates.filter((candidate) => {
+      const key = dayKey(candidate);
+      return key === "saturday" || key === "sunday";
+    });
+    const capacities = longCandidates
       .map((candidate) => minuteCapacity(candidate, profile) ?? 0)
       .filter((value) => value > 0);
     const maxCapacity = capacities.length ? Math.max(...capacities) : 0;
     const currentCapacity = capacity ?? 0;
     if (maxCapacity > 0) score += Math.max(0, maxCapacity - currentCapacity) * 3;
     const weekday = dayKey(date);
-    if (weekday === "saturday" || weekday === "sunday") score -= 80;
+    const isWeekend = weekday === "saturday" || weekday === "sunday";
+    if (weekendCandidates.length && !isWeekend) score += 5000;
+    if (isWeekend) score -= 500;
   }
 
   for (const other of placed) score += pairPenalty(session, date, other, other.date);
