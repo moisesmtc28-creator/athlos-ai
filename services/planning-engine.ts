@@ -52,7 +52,7 @@ function isStrengthLower(session: PlannerSession): boolean {
 function isLongRide(session: PlannerSession): boolean {
   if (session.type !== "bike") return false;
   if (session.role === "bike_long") return true;
-  if (session.role && session.role !== "bike_long") return false;
+  if (session.role) return false;
   return longRidePattern.test(`${session.title} ${session.description ?? ""}`) || session.duration >= 100;
 }
 
