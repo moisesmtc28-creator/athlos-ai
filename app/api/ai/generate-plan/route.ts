@@ -1070,7 +1070,7 @@ FORMATO OBRIGATÓRIO
     const candidates = plan.sessions.map((session) => ({
       ...session,
       type: normalizeSessionType(session),
-      role: inferTrainingRole({ ...session, type: normalizeSessionType(session) }),
+      role: inferTrainingRole({ ...session, type: normalizeSessionType(session) }) ?? undefined,
     }));
     const used = new Set<number>();
 
