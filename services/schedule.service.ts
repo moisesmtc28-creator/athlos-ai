@@ -1,28 +1,16 @@
 import { supabase } from "@/app/lib/supabase";
 
-function addIsoDays(value: string, amount: number): string {
-  const date = new Date(`${value}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + amount);
-  return date.toISOString().slice(0, 10);
-}
-
-function weekBounds(value: string): { start: string; end: string; dates: string[] } {
-  const date = new Date(`${value}T12:00:00Z`);
-  const day = date.getUTCDay();
-  date.setUTCDate(date.getUTCDate() - (day === 0 ? 6 : day - 1));
-  const start = date.toISOString().slice(0, 10);
-  const dates = Array.from({ length: 7 }, (_, index) => addIsoDays(start, index));
-  return { start, end: dates[6], dates };
-}
-
-export async function moveTraining(trainingId: string, newDate: string, reason = "Movido pelo atleta no calendário") {
+export async function moveTraining(trainingId: string, newDate: string, reason = "Movido manualmente pelo atleta no calendário") {
   const { data: current, error: readError } = await supabase
     .from("training_sessions")
-    .select("scheduled_date, original_scheduled_date, reschedule_reason")
+    .select("scheduled_date, original_scheduled_date")
     .eq("id", trainingId)
     .single();
   if (readError) throw new Error(readError.message);
 
+  // Movimento manual é soberano: o Athlos salva exatamente o dia escolhido pelo atleta.
+  // A reorganização automática só acontece quando o atleta clicar em
+  // "Reorganizar como treinador". Assim o motor não desfaz um arraste manual.
   const { error } = await supabase.from("training_sessions").update({
     scheduled_date: newDate,
     original_scheduled_date: current.original_scheduled_date ?? current.scheduled_date,
@@ -30,20 +18,6 @@ export async function moveTraining(trainingId: string, newDate: string, reason =
     updated_at: new Date().toISOString(),
   }).eq("id", trainingId);
   if (error) throw new Error(error.message);
-  // O treino movido vira uma preferência fixa; o motor reorganiza os demais ao redor dele.
-  const bounds = weekBounds(newDate);
-  try {
-    await reorganizeWeek(bounds.start, bounds.end, `${reason}. Preserve o treino movido e ajuste conflitos ao redor.`, [{ id: trainingId, date: newDate }]);
-  } catch (reorganizeError) {
-    // Evita mostrar sucesso parcial: se o rebalanceamento falhar, devolve o treino para a data anterior.
-    await supabase.from("training_sessions").update({
-      scheduled_date: current.scheduled_date,
-      original_scheduled_date: current.original_scheduled_date,
-      reschedule_reason: current.reschedule_reason,
-      updated_at: new Date().toISOString(),
-    }).eq("id", trainingId);
-    throw reorganizeError;
-  }
 }
 
 export async function markTrainingMissed(trainingId: string, reason: string) {

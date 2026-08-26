@@ -38,8 +38,16 @@ function TrainingChip({ training, weekDates, onMove }: { training: Training; wee
   const strength = training.type === "strength" || training.title.startsWith("Musculação");
   return (
     <div ref={setNodeRef} style={style} className={`rounded-xl border p-3 text-xs shadow-lg transition ${strength ? "border-violet-500/30 bg-violet-950/60 text-violet-200" : "border-emerald-500/30 bg-emerald-950/60 text-emerald-200"} ${isDragging ? "z-50 opacity-70" : ""}`}>
+      <button
+        {...listeners}
+        {...attributes}
+        type="button"
+        className="mb-2 hidden w-full cursor-grab touch-none items-center justify-center gap-1 rounded-lg border border-white/10 bg-black/15 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 hover:border-white/20 hover:text-white active:cursor-grabbing sm:flex"
+        title="Segure e arraste este treino para outro dia"
+      >
+        <GripVertical size={14}/> Arraste para mover
+      </button>
       <div className="flex items-start gap-2">
-        <button {...listeners} {...attributes} className="mt-0.5 hidden cursor-grab touch-none text-zinc-500 hover:text-white sm:block" title="Arrastar treino"><GripVertical size={15}/></button>
         <Link href={`/training/${training.id}`} className="min-w-0 flex-1">
           <strong className="block leading-5">{training.title}</strong>
           <span className="mt-1 block text-[11px] opacity-75">{training.duration} min {strength ? "· Academia" : `· ${training.zone}`}</span>
@@ -97,7 +105,7 @@ export default function CalendarPage() {
     try {
       await moveTraining(trainingId, newDate);
       await queryClient.invalidateQueries({ queryKey: ["trainings"] });
-      toast.success("Treino movido. O Coach usará essa mudança nas próximas decisões.");
+      toast.success("Treino movido para o dia escolhido. A organização manual foi preservada.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível mover o treino.");
     }
@@ -136,7 +144,11 @@ export default function CalendarPage() {
           <button onClick={() => setAnchor(addDays(anchor,7))} className="rounded-lg p-2 hover:bg-zinc-800"><ChevronRight/></button>
         </div>
 
-        <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 sm:text-sm"><Dumbbell className="mr-2 inline text-violet-400" size={16}/> Roxo = musculação · Verde = ciclismo. O motor protege pernas de tiros/limiar e posiciona o longão na melhor janela disponível.</div>
+        <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 sm:text-sm">
+          <Dumbbell className="mr-2 inline text-violet-400" size={16}/> Roxo = musculação · Verde = ciclismo.
+          <span className="ml-1 font-semibold text-amber-300">Modo manual:</span> arrastar ou usar “Mover para” salva exatamente o dia escolhido e não será desfeito automaticamente.
+          Use <span className="font-semibold text-emerald-300">Reorganizar como treinador</span> somente quando quiser que o Athlos redistribua a semana.
+        </div>
 
         {isLoading ? <p className="mt-8 text-zinc-400">Carregando...</p> : isError ? <p className="mt-8 text-red-400">Erro ao carregar treinos.</p> : (
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
