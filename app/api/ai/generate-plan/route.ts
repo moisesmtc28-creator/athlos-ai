@@ -94,7 +94,7 @@ type GeminiPlan = {
 };
 
 function fallbackBikeSession(index: number): GeminiSession & { type: "bike" } {
-  const templates: Array<Omit<GeminiSession, "date">> = [
+  const templates: Array<Omit<GeminiSession, "date" | "type"> & { type: "bike" }> = [
     { title: "Rodagem de Base e Técnica", description: "Pedale de forma contínua e confortável, priorizando cadência fluida, técnica e baixa fadiga. Termine com sensação de que conseguiria continuar.", duration: 60, zone: "Z2", type: "bike", focus: "Base aeróbica e eficiência", exercises: [] },
     { title: "Intervalado de Ritmo Sustentado", description: "Aqueça progressivamente. Faça 3 blocos de 8 minutos em ritmo sustentado Z3, com 4 minutos leves entre os blocos. Desaqueça ao final.", duration: 60, zone: "Z3", type: "bike", focus: "Resistência de ritmo", exercises: [] },
     { title: "Tiros de Limiar Controlados", description: "Aqueça bem. Faça 4 blocos de 4 minutos em Z4, recuperando 4 minutos em Z1/Z2. Mantenha a execução controlada, sem sprintar.", duration: 60, zone: "Z4", type: "bike", focus: "Limiar e capacidade aeróbica", exercises: [] },
@@ -105,7 +105,7 @@ function fallbackBikeSession(index: number): GeminiSession & { type: "bike" } {
 }
 
 function fallbackStrengthSession(index: number): GeminiSession & { type: "strength" } {
-  const templates: Array<Omit<GeminiSession, "date">> = [
+  const templates: Array<Omit<GeminiSession, "date" | "type"> & { type: "strength" }> = [
     {
       title: "Treino A — Força de pernas e core", description: "Sessão de força complementar ao ciclismo. Trabalhe com técnica limpa e 2 a 3 repetições em reserva.", duration: 55, zone: "Z1", type: "strength", focus: "Força de membros inferiores e estabilidade de core",
       exercises: [
