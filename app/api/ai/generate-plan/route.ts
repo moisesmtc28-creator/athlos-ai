@@ -93,6 +93,64 @@ type GeminiPlan = {
   sessions: GeminiSession[];
 };
 
+function fallbackBikeSession(index: number): GeminiSession {
+  const templates: Array<Omit<GeminiSession, "date">> = [
+    { title: "Rodagem de Base e Técnica", description: "Pedale de forma contínua e confortável, priorizando cadência fluida, técnica e baixa fadiga. Termine com sensação de que conseguiria continuar.", duration: 60, zone: "Z2", type: "bike", focus: "Base aeróbica e eficiência", exercises: [] },
+    { title: "Intervalado de Ritmo Sustentado", description: "Aqueça progressivamente. Faça 3 blocos de 8 minutos em ritmo sustentado Z3, com 4 minutos leves entre os blocos. Desaqueça ao final.", duration: 60, zone: "Z3", type: "bike", focus: "Resistência de ritmo", exercises: [] },
+    { title: "Tiros de Limiar Controlados", description: "Aqueça bem. Faça 4 blocos de 4 minutos em Z4, recuperando 4 minutos em Z1/Z2. Mantenha a execução controlada, sem sprintar.", duration: 60, zone: "Z4", type: "bike", focus: "Limiar e capacidade aeróbica", exercises: [] },
+    { title: "Longão de Resistência Aeróbica", description: "Pedal longo predominantemente em Z2. Mantenha alimentação, hidratação e ritmo constantes, evitando transformar o treino em prova.", duration: 180, zone: "Z2", type: "bike", focus: "Endurance e resistência aeróbica", exercises: [] },
+  ];
+  const template = templates[index % templates.length];
+  return { ...template, date: "" };
+}
+
+function fallbackStrengthSession(index: number): GeminiSession {
+  const templates: Array<Omit<GeminiSession, "date">> = [
+    {
+      title: "Treino A — Força de pernas e core", description: "Sessão de força complementar ao ciclismo. Trabalhe com técnica limpa e 2 a 3 repetições em reserva.", duration: 55, zone: "Z1", type: "strength", focus: "Força de membros inferiores e estabilidade de core",
+      exercises: [
+        { name: "Agachamento", muscleGroup: "Quadríceps e glúteos", sets: 3, reps: "6-8", loadKg: null, restSeconds: 120, instructions: "Amplitude confortável e tronco estável." },
+        { name: "Levantamento terra romeno", muscleGroup: "Posterior e glúteos", sets: 3, reps: "8-10", loadKg: null, restSeconds: 120, instructions: "Quadril para trás e coluna neutra." },
+        { name: "Afundo", muscleGroup: "Pernas", sets: 3, reps: "8 por lado", loadKg: null, restSeconds: 90, instructions: "Controle o joelho e mantenha equilíbrio." },
+        { name: "Panturrilha em pé", muscleGroup: "Panturrilhas", sets: 3, reps: "12-15", loadKg: null, restSeconds: 60, instructions: "Use amplitude completa." },
+        { name: "Prancha", muscleGroup: "Core", sets: 3, reps: "30-45 s", loadKg: null, restSeconds: 60, instructions: "Mantenha quadril e tronco alinhados." },
+      ],
+    },
+    {
+      title: "Treino B — Superiores e estabilidade postural", description: "Sessão para sustentação na bicicleta, postura e equilíbrio muscular, sem gerar fadiga importante nas pernas.", duration: 50, zone: "Z1", type: "strength", focus: "Costas, peito, ombros e estabilidade escapular",
+      exercises: [
+        { name: "Puxada frontal", muscleGroup: "Costas", sets: 3, reps: "10-12", loadKg: null, restSeconds: 75, instructions: "Puxe com os cotovelos sem balançar o tronco." },
+        { name: "Supino com halteres", muscleGroup: "Peito", sets: 3, reps: "8-12", loadKg: null, restSeconds: 90, instructions: "Controle a descida e não treine até a falha." },
+        { name: "Remada baixa", muscleGroup: "Costas", sets: 3, reps: "10-12", loadKg: null, restSeconds: 75, instructions: "Aproxime as escápulas no final." },
+        { name: "Desenvolvimento com halteres", muscleGroup: "Ombros", sets: 3, reps: "8-10", loadKg: null, restSeconds: 75, instructions: "Mantenha abdômen ativo." },
+        { name: "Pallof press", muscleGroup: "Core", sets: 3, reps: "10 por lado", loadKg: null, restSeconds: 60, instructions: "Resista à rotação do tronco." },
+      ],
+    },
+    {
+      title: "Treino C — Unilateral, posterior e core", description: "Força funcional com ênfase unilateral. Use carga moderada e preserve qualidade para os pedais-chave.", duration: 55, zone: "Z1", type: "strength", focus: "Cadeia posterior, controle unilateral e core",
+      exercises: [
+        { name: "Step-up", muscleGroup: "Pernas e glúteos", sets: 3, reps: "8 por lado", loadKg: null, restSeconds: 90, instructions: "Suba sem impulso da perna de trás." },
+        { name: "Mesa flexora", muscleGroup: "Posterior", sets: 3, reps: "10-12", loadKg: null, restSeconds: 75, instructions: "Controle todo o movimento." },
+        { name: "Hip thrust", muscleGroup: "Glúteos", sets: 3, reps: "8-10", loadKg: null, restSeconds: 90, instructions: "Finalize com glúteos, sem hiperestender a lombar." },
+        { name: "Remada unilateral", muscleGroup: "Costas", sets: 3, reps: "10 por lado", loadKg: null, restSeconds: 75, instructions: "Mantenha quadril estável." },
+        { name: "Dead bug", muscleGroup: "Core", sets: 3, reps: "8 por lado", loadKg: null, restSeconds: 60, instructions: "Mantenha a lombar apoiada." },
+      ],
+    },
+    {
+      title: "Treino D — Superiores, core e prevenção", description: "Sessão de menor custo para as pernas, adequada para complementar semanas com bastante ciclismo.", duration: 45, zone: "Z1", type: "strength", focus: "Parte superior, core e prevenção de lesões",
+      exercises: [
+        { name: "Face pull", muscleGroup: "Ombros e escápulas", sets: 3, reps: "12-15", loadKg: null, restSeconds: 60, instructions: "Mantenha ombros baixos e controle a volta." },
+        { name: "Remada sentada", muscleGroup: "Costas", sets: 3, reps: "10-12", loadKg: null, restSeconds: 75, instructions: "Evite compensar com a lombar." },
+        { name: "Flexão ou chest press", muscleGroup: "Peito", sets: 3, reps: "8-12", loadKg: null, restSeconds: 75, instructions: "Pare antes da falha técnica." },
+        { name: "Elevação lateral", muscleGroup: "Ombros", sets: 3, reps: "12-15", loadKg: null, restSeconds: 60, instructions: "Use carga leve e movimento controlado." },
+        { name: "Prancha lateral", muscleGroup: "Core", sets: 3, reps: "30 s por lado", loadKg: null, restSeconds: 60, instructions: "Mantenha o corpo alinhado." },
+      ],
+    },
+  ];
+  const template = templates[index % templates.length];
+  return { ...template, date: "" };
+}
+
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];
 }
@@ -817,13 +875,17 @@ FORMATO OBRIGATÓRIO
       .filter((session) => session.type === "strength")
       .slice(0, requestedStrengthDays);
 
-    if (bikeSessions.length < weeklyBikeDays || strengthSessions.length < requestedStrengthDays) {
-      throw new Error(
-        `A IA não retornou treinos suficientes. Recebidos: ${bikeSessions.length}/${weeklyBikeDays} de ciclismo e ${strengthSessions.length}/${requestedStrengthDays} de musculação. Tente gerar novamente.`,
-      );
+    // A resposta da IA é uma sugestão de conteúdo, não a autoridade sobre a
+    // quantidade. Se um modelo gratuito devolver menos sessões, completamos
+    // deterministicamente aqui. Assim uma resposta 3/4 nunca apaga a semana.
+    while (bikeSessions.length < weeklyBikeDays) {
+      bikeSessions.push(fallbackBikeSession(bikeSessions.length));
+    }
+    while (strengthSessions.length < requestedStrengthDays) {
+      strengthSessions.push(fallbackStrengthSession(strengthSessions.length));
     }
 
-    // Daqui em diante trabalhamos somente com a quantidade correta.
+    // Daqui em diante o Athlos sempre trabalha com a quantidade configurada.
     plan.sessions = [...bikeSessions, ...strengthSessions];
 
     /*
