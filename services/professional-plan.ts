@@ -138,7 +138,18 @@ export function buildProfessionalWeek(input: ProfessionalPlanInput): Professiona
   if (bikeDays === 3) bikeRoles = ["bike_endurance", quality, "bike_long"];
   if (bikeDays === 4) bikeRoles = ["bike_recovery", "bike_tempo", quality, "bike_long"];
   if (bikeDays === 5) bikeRoles = ["bike_recovery", "bike_endurance", "bike_tempo", quality, "bike_long"];
-  if (bikeDays >= 6) bikeRoles = ["bike_recovery", "bike_endurance", "bike_tempo", quality, "bike_endurance", "bike_long", "bike_recovery"].slice(0, bikeDays);
+  if (bikeDays >= 6) {
+    const extendedBikeRoles: TrainingRole[] = [
+      "bike_recovery",
+      "bike_endurance",
+      "bike_tempo",
+      quality,
+      "bike_endurance",
+      "bike_long",
+      "bike_recovery",
+    ];
+    bikeRoles = extendedBikeRoles.slice(0, bikeDays);
+  }
 
   let strengthRoles: TrainingRole[] = [];
   if (strengthDays === 1) strengthRoles = ["strength_full_body"];
